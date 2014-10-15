@@ -36,8 +36,12 @@ const (
 	 * we store an array of the roots from previous transactions
 	 * in the super.
 	 */
-	BTRFS_NUM_BACKUP_ROOTS = 4
-	BTRFS_MAGIC            = 0x4D5F53665248425F /* ascii _BHRfS_M, no null */
+	BTRFS_NUM_BACKUP_ROOTS    = 4
+	BTRFS_MAGIC               = 0x4D5F53665248425F /* ascii _BHRfS_M, no null */
+	BTRFS_HEADER_FLAG_WRITTEN = (1 << 0)
+	BTRFS_HEADER_FLAG_RELOC   = (1 << 1)
+	BTRFS_SUPER_FLAG_SEEDING  = (1 << 32)
+	BTRFS_SUPER_FLAG_METADUMP = (1 << 33)
 )
 
 type (
@@ -47,6 +51,8 @@ type (
 	le32 uint32
 	char byte
 	le16 uint16
+	u16  uint16
+	u32  uint32
 )
 
 // The flag package provides a default help printer via -h switch
@@ -55,9 +61,11 @@ var (
 	deviceFlag      *string = flag.String("d", DEFAULT_DEVICE, "The device to scan")
 	blocksFlag      *int64  = flag.Int64("n", DEFAULT_BLOCKS, "The number of BTRFS_SIZE blocks to read")
 	startblocksFlag *int64  = flag.Int64("s", 0, "The number of BTRFS_SIZE blocks to start at")
-	sb              btrfs_super_block
+
+	btrfs_csum_sizes = []int{4, 0}
 )
 
+//
 func btrfs_sb_offset(mirror int) uint64 {
 	var start uint64 = 16 * 1024
 	if mirror != 0 {
@@ -66,166 +74,229 @@ func btrfs_sb_offset(mirror int) uint64 {
 	return BTRFS_SUPER_INFO_OFFSET
 }
 
+type rb_root struct {
+}
+type cache_tree struct {
+	root rb_root
+}
+
+type list_head struct {
+	next *list_head
+	prev *list_head
+}
+
 type btrfs_root_backup struct {
-	tree_root     le64
-	tree_root_gen le64
+	Tree_root     le64
+	Tree_root_gen le64
 
-	chunk_root     le64
-	chunk_root_gen le64
+	Chunk_root     le64
+	Chunk_root_gen le64
 
-	extent_root     le64
-	extent_root_gen le64
+	Extent_root     le64
+	Extent_root_gen le64
 
-	fs_root     le64
-	fs_root_gen le64
+	Fs_root     le64
+	Fs_root_gen le64
 
-	dev_root     le64
-	dev_root_gen le64
+	Dev_root     le64
+	Dev_root_gen le64
 
-	csum_root     le64
-	csum_root_gen le64
+	Csum_root     le64
+	Csum_root_gen le64
 
-	total_bytes le64
-	bytes_used  le64
-	num_devices le64
+	Total_bytes le64
+	Bytes_used  le64
+	Num_devices le64
 	/* future */
-	unsed_64 [4]le64
+	Unsed_64 [4]le64
 
-	tree_root_level   u8
-	chunk_root_level  u8
-	extent_root_level u8
-	fs_root_level     u8
-	dev_root_level    u8
-	csum_root_level   u8
+	Tree_root_level   u8
+	Chunk_root_level  u8
+	Extent_root_level u8
+	Fs_root_level     u8
+	Dev_root_level    u8
+	Csum_root_level   u8
 	/* future and to align */
-	unused_8 [10]u8
+	Unused_8 [10]u8
 }
 
 type btrfs_dev_item struct {
 	/* the internal btrfs device id */
 	Devid le64
-
 	/* size of the device */
 	Total_bytes le64
-
 	/* bytes used */
 	Bytes_used le64
-
 	/* optimal io alignment for this device */
 	Io_align le32
-
 	/* optimal io width for this device */
 	Io_width le32
-
 	/* minimal io size for this device */
 	Sector_size le32
-
 	/* type and info about this device */
 	Type le64
-
 	/* expected generation for this device */
 	Generation le64
-
 	/*
 	 * starting byte of this partition on the device,
 	 * to allowr for stripe alignment in the future
 	 */
 	Start_offset le64
-
 	/* grouping information for allocation decisions */
 	Dev_group le32
-
 	/* seek speed 0-100 where 100 is fastest */
 	Seek_speed u8
-
 	/* bandwidth 0-100 where 100 is fastest */
 	Bandwidth u8
-
 	/* btrfs generated uuid for this device */
 	Uuid [BTRFS_UUID_SIZE]u8
-
 	/* uuid of FS who owns this device */
 	Fsid [BTRFS_UUID_SIZE]u8
 }
 
 type btrfs_super_block struct {
-	csum [BTRFS_CSUM_SIZE]u8
+	Csum [BTRFS_CSUM_SIZE]u8
 	/* the first 3 fields must match struct btrfs_header */
-	fsid   [BTRFS_FSID_SIZE]u8 /* FS specific uuid */
-	bytenr le64                /* this block number */
-	flags  le64
+	Fsid   [BTRFS_FSID_SIZE]u8 /* FS specific uuid */
+	Bytenr le64                /* this block number */
+	Flags  le64
 
 	/* allowed to be different from the btrfs_header from here own down */
-	magic      le64
-	generation le64
-	root       le64
-	chunk_root le64
-	log_root   le64
+	Magic      le64
+	Generation le64
+	Root       le64
+	Chunk_root le64
+	Log_root   le64
 
 	/* this will help find the new super based on the log root */
-	log_root_transid      le64
-	total_bytes           le64
-	bytes_used            le64
-	root_dir_objectid     le64
-	num_devices           le64
-	sectorsize            le32
-	nodesize              le32
-	leafsize              le32
-	stripesize            le32
-	sys_chunk_array_size  le32
-	chunk_root_generation le64
-	compat_flags          le64
-	compat_ro_flags       le64
-	incompat_flags        le64
-	csum_type             le16
-	root_level            u8
-	chunk_root_level      u8
-	log_root_level        u8
-	dev_item              btrfs_dev_item
+	Log_root_transid      le64
+	Total_bytes           le64
+	Bytes_used            le64
+	Root_dir_objectid     le64
+	Num_devices           le64
+	Sectorsize            le32
+	Nodesize              le32
+	Leafsize              le32
+	Stripesize            le32
+	Sys_chunk_array_size  le32
+	Chunk_root_generation le64
+	Compat_flags          le64
+	Compat_ro_flags       le64
+	Incompat_flags        le64
+	Csum_type             le16
+	Root_level            u8
+	Chunk_root_level      u8
+	Log_root_level        u8
+	Dev_item              btrfs_dev_item
 
-	label [BTRFS_LABEL_SIZE]char
+	Label [BTRFS_LABEL_SIZE]char
 
-	cache_generation     le64
-	uuid_tree_generation le64
+	Cache_generation     le64
+	Uuid_tree_generation le64
 
 	/* future expansion */
-	reserved        [30]le64
-	sys_chunk_array [BTRFS_SYSTEM_CHUNK_ARRAY_SIZE]u8
-	super_roots     [BTRFS_NUM_BACKUP_ROOTS]btrfs_root_backup
+	Reserved        [30]le64
+	Sys_chunk_array [BTRFS_SYSTEM_CHUNK_ARRAY_SIZE]u8
+	Super_roots     [BTRFS_NUM_BACKUP_ROOTS]btrfs_root_backup
+}
+type btrfs_fs_devices struct {
+	fsid [BTRFS_FSID_SIZE]u8 /* FS specific uuid */
+
+	/* the device with this id has the most recent copy of the super */
+	latest_devid u64
+	latest_trans u64
+	lowest_devid u64
+	latest_bdev  int
+	lowest_bdev  int
+	devices      list_head
+	list         list_head
+
+	seeding int
+	seed    *btrfs_fs_devices
+}
+type block_group_tree struct {
+	tree         cache_tree
+	block_groups list_head
+}
+type device_extent_tree struct {
+	tree cache_tree
+	/*
+	 * The idea is:
+	 * When checking the chunk information, we move the device extents
+	 * that has its chunk to the chunk's device extents list. After the
+	 * check, if there are still some device extents in no_chunk_orphans,
+	 * it means there are some device extents which don't belong to any
+	 * chunk.
+	 *
+	 * The usage of no_device_orphans is the same as the first one, but it
+	 * is for the device information check.
+	 */
+	no_chunk_orphans  list_head
+	no_device_orphans list_head
+}
+type recover_control struct {
+	verbose int
+	yes     int
+
+	csum_size             u16
+	sectorsize            u32
+	leafsize              u32
+	generation            u64
+	chunk_root_generation u64
+
+	fs_devices *btrfs_fs_devices
+
+	chunk    cache_tree
+	bg       block_group_tree
+	devext   device_extent_tree
+	eb_cache cache_tree
+
+	good_chunks       list_head
+	bad_chunks        list_head
+	unrepaired_chunks list_head
+	//pthread_mutex_t rc_lock;
 }
 
-func btrfs_read_dev_super(fd int, sb *btrfs_super_block, sb_bytenr u64,
-	super_recover int) int {
+func btrfs_super_csum_size(s *btrfs_super_block) int {
+	t := s.Csum_type
+	//BUG_ON(t >= ARRAY_SIZE(btrfs_csum_sizes));
+	return btrfs_csum_sizes[t]
+}
+
+// reads super block into sb at offset sb_bytenr
+// if super_recover is != 0 the read superblock backups ad find latest generation
+func btrfs_read_dev_super(fd int, sb *btrfs_super_block, sb_bytenr u64, super_recover int) bool {
 	var (
 		fsid                [BTRFS_FSID_SIZE]u8
 		fsid_is_initialized bool = false
-		buf                 btrfs_super_block
+		buf                 *btrfs_super_block
 		//		i                   int
 		//		ret                 int
 		max_super int  = 1
 		transid   le64 = 0
-		bytenr    u64
+		bytenr    int64
 		//		err                 error
 	)
-
+	buf = new(btrfs_super_block)
 	if super_recover != 0 {
 		max_super = BTRFS_SUPER_MIRROR_MAX
 	}
 	var size = binary.Size(buf)
 	var bytebuf = make([]byte, size)
 	var bytebr = bytes.NewReader(bytebuf)
+	// dont look like this will be executed
 	if sb_bytenr != BTRFS_SUPER_INFO_OFFSET {
 		ret, _ := syscall.Pread(fd, bytebuf, int64(sb_bytenr))
 		if ret < size {
-			return -1
+			return false
 		}
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
-		if buf.bytenr != le64(sb_bytenr) ||
-			buf.magic != BTRFS_MAGIC {
-			return -1
+		if buf.Bytenr != le64(sb_bytenr) ||
+			buf.Magic != BTRFS_MAGIC {
+			return false
 		}
-
-		return 0
+		*sb = *buf
+		return true
 	}
 
 	/*
@@ -236,46 +307,55 @@ func btrfs_read_dev_super(fd int, sb *btrfs_super_block, sb_bytenr u64,
 	 */
 
 	for i := 0; i < max_super; i++ {
-		bytenr = u64(btrfs_sb_offset(i))
-		ret, _ := syscall.Pread(fd, bytebuf, int64(sb_bytenr))
+		fmt.Printf("i: %v\n", i)
+
+		bytenr = int64(btrfs_sb_offset(i))
+		fmt.Printf("bytenr: %v\n", bytenr)
+		ret, _ := syscall.Pread(fd, bytebuf, bytenr)
+		//fmt.Printf("err: %v, ret: %v. bytebuf: %v\n", err, ret, bytebuf)
 		if ret < size {
 			break
 		}
+		bytebr = bytes.NewReader(bytebuf)
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
-		if buf.bytenr != le64(bytenr) {
+		if buf.Bytenr != le64(bytenr) {
+			fmt.Printf("bad bytent: should be %v not %v\n",bytenr,buf.Bytenr)
 			continue
 		}
 
 		/* if magic is NULL, the device was removed */
-		if buf.magic == 0 && i == 0 {
-			return -1
+		if buf.Magic == 0 && i == 0 {
+			return false
 		}
-		if buf.magic == BTRFS_MAGIC {
+		if buf.Magic != BTRFS_MAGIC {
+			fmt.Printf("bad magic %x not %x\n",buf.Magic,BTRFS_MAGIC)
 			continue
 		}
 
 		if !fsid_is_initialized {
 
-			fsid = buf.fsid
+			fsid = buf.Fsid
 			fsid_is_initialized = true
-		} else if fsid != buf.fsid {
+		} else if fsid != buf.Fsid {
 			/*
 			 * the superblocks (the original one and
 			 * its backups) contain data of different
 			 * filesystems -> the super cannot be trusted
 			 */
+			fmt.Printf("bad fsid %x not %x\n",fsid ,buf.Fsid)
 			continue
 		}
 
-		if buf.generation > transid {
-			sb = &buf
-			transid = buf.generation
+		if buf.Generation > transid {
+			*sb = *buf
+//			fmt.Printf("buf: %+v\n\n\nsb inside: %+v\n", buf, sb)
+			transid = buf.Generation
 		}
 	}
 	if transid > 0 {
-		return 0
+		return true
 	} else {
-		return -1
+		return false
 	}
 
 }
@@ -285,8 +365,10 @@ func isAlphaNum(c uint8) bool {
 	return c == '_' || '0' <= c && c <= '9' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }
 func main() {
-	var buf []byte = make([]byte, BTRFS_SIZE)
+	
 	var empty []byte = make([]byte, BTRFS_SIZE)
+	var sb btrfs_super_block
+	var rc recover_control
 
 	flag.Parse() // Scan the arguments list
 
@@ -298,7 +380,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for bytenr := int64(*startblocksFlag * BTRFS_SIZE); bytenr < BTRFS_SIZE*(*blocksFlag); bytenr += BTRFS_SIZE {
+	ret := btrfs_read_dev_super(fd, &sb, BTRFS_SUPER_INFO_OFFSET, 1)
+	if ! ret  {
+		log.Fatal("read super block error\n")
+	}
+	fmt.Printf("SB: %+v\n", sb)
+	rc.sectorsize = u32(sb.Sectorsize)
+	rc.leafsize = u32(sb.Leafsize)
+	rc.generation = u64(sb.Generation)
+	rc.chunk_root_generation = u64(sb.Chunk_root_generation)
+	rc.csum_size = u16(btrfs_super_csum_size(&sb))
+	fmt.Printf("RC: %+v\n", rc)
+	var buf []byte = make([]byte, rc.leafsize)
+	/* if seed, the result of scanning below will be partial */
+	if (sb.Flags & BTRFS_SUPER_FLAG_SEEDING) != 0 {
+		fmt.Errorf("this device is seed device\n")
+		ret = false
+		goto fail_free_sb
+	}
+	for bytenr := int64(*startblocksFlag * BTRFS_SIZE); bytenr < BTRFS_SIZE*(*blocksFlag); bytenr += int64(rc.leafsize) {
 		n, err := syscall.Pread(fd, buf, bytenr)
 		if err != nil {
 			log.Fatalln(os.NewSyscallError("pread64", err))
@@ -309,16 +409,16 @@ func main() {
 		if bytes.Equal(buf, empty) {
 			continue
 		}
-		fmt.Printf("Read %v bytes from %v @%v\n", n, fd, bytenr)
-		for _, elem := range buf {
-			if isAlphaNum(elem) {
-				fmt.Print(string(elem))
-			} else {
-				fmt.Print(".")
-			}
-
-		}
-		fmt.Println("")
+//		fmt.Printf("Read %v bytes from %v @%v\n", n, fd, bytenr)
+//		for _, elem := range buf {
+//			if isAlphaNum(elem) {
+//				fmt.Print(string(elem))
+//			} else {
+//				fmt.Print(".")
+//			}
+//
+//		}
+//		fmt.Println("")
 	}
-
+fail_free_sb:
 }
