@@ -2,8 +2,8 @@ package btrfs
 
 import (
 	"bytes"
-	"fmt"
 	"encoding/binary"
+	"fmt"
 	"syscall"
 )
 
@@ -20,13 +20,13 @@ func btrfs_sb_offset(mirror int) uint64 {
 // if super_recover is != 0 the read superblock backups ad find latest generation
 func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_recover int) bool {
 	var (
-		fsid                [BTRFS_FSID_SIZE]U8
+		fsid                [BTRFS_FSID_SIZE]uint8
 		fsid_is_initialized bool = false
 		buf                 *Btrfs_super_block
 		//		i                   int
 		//		ret                 int
-		max_super int  = 1
-		transid   Le64 = 0
+		max_super int    = 1
+		transid   uint64 = 0
 		bytenr    int64
 		//		err                 error
 	)
@@ -44,7 +44,7 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 			return false
 		}
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
-		if buf.Bytenr != Le64(sb_bytenr) ||
+		if buf.Bytenr != uint64(sb_bytenr) ||
 			buf.Magic != BTRFS_MAGIC {
 			return false
 		}
@@ -71,7 +71,7 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 		}
 		bytebr = bytes.NewReader(bytebuf)
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
-		if buf.Bytenr != Le64(bytenr) {
+		if buf.Bytenr != uint64(bytenr) {
 			fmt.Printf("bad bytent: should be %v not %v\n", bytenr, buf.Bytenr)
 			continue
 		}
