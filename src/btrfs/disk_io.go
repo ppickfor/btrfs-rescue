@@ -112,3 +112,40 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 	}
 
 }
+
+func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
+	verify bool, silent bool) bool {
+	//	char *result;
+	//	u32 len;
+	//	u32 crc = ~(u32)0;
+	//
+	//	result = malloc(csum_size * sizeof(char));
+	//	if (!result)
+	//		return 1;
+	//
+	//	len = buf->len - BTRFS_CSUM_SIZE;
+	//	crc = crc32c(crc, buf->data + BTRFS_CSUM_SIZE, len);
+	//	btrfs_csum_final(crc, result);
+	//
+	//	if (verify) {
+	//		if (memcmp_extent_buffer(buf, result, 0, csum_size)) {
+	//			if (!silent)
+	//				printk("checksum verify failed on %llu found %08X wanted %08X\n",
+	//				       (unsigned long long)buf->start,
+	//				       *((u32 *)result),
+	//				       *((u32*)(char *)buf->data));
+	//			free(result);
+	//			return 1;
+	//		}
+	//	} else {
+	//		write_extent_buffer(buf, result, 0, csum_size);
+	//	}
+	//	free(result);
+	//	return false
+	return true
+
+}
+
+func verify_tree_block_csum_silent(buf *Extent_buffer, csum_size uint16) bool {
+	return csum_tree_block_size(buf, csum_size, true, true)
+}

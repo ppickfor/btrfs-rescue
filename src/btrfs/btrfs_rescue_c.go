@@ -1,18 +1,18 @@
 package btrfs
 
 import (
-
+	"sync"
 )
 
 type Recover_control struct {
 	Verbose int
 	Yes     int
 
-	Csum_size             U16
-	Sectorsize            U32
-	Leafsize              U32
-	Generation            U64
-	Chunk_root_generation U64
+	Csum_size             uint16
+	Sectorsize            uint64
+	Leafsize              uint64
+	Generation            uint64
+	Chunk_root_generation uint64
 
 	Fs_devices *Btrfs_fs_devices
 
@@ -24,5 +24,5 @@ type Recover_control struct {
 	Good_chunks       List_head
 	Bad_chunks        List_head
 	Unrepaired_chunks List_head
-	//pthread_mutex_t rc_lock;
+	Rc_lock           sync.Mutex
 }
