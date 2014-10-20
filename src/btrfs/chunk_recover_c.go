@@ -28,14 +28,14 @@ func scan_one_device(dev_scan *Device_scan) bool {
 		device *Btrfs_device    = dev_scan.Dev
 		fd     int              = dev_scan.Fd
 		//		oldtype int
-		p unsafe.Pointer
 		h *Btrfs_header
 	)
-
+	buf = new(Extent_buffer)
 	buf.Len = uint64(rc.Leafsize)
 	buf.Data = make([]byte, rc.Leafsize)
 loop:
 	for bytenr = 0; ; bytenr += rc.Sectorsize {
+		ret = false
 		if is_super_block_address(bytenr) {
 			bytenr += rc.Sectorsize
 		}
@@ -46,8 +46,7 @@ loop:
 		if n < int(rc.Leafsize) {
 			break loop
 		}
-		p = unsafe.Pointer(&buf.Data)
-		h = (*Btrfs_header)(p)
+		h = (*Btrfs_header)(unsafe.Pointer(&buf.Data))
 		if rc.Fs_devices.Fsid != h.Fsid || verify_tree_block_csum_silent(buf, uint16(rc.Csum_size)) {
 			continue loop
 		}
@@ -64,14 +63,14 @@ loop:
 				if h.Generation > rc.Generation {
 					continue loop
 				}
-				if ret = extract_metadata_record(rc, buf); ret {
+				if ret = extract_metadata_record(rc, buf); !ret {
 					break loop
 				}
 			case BTRFS_CHUNK_TREE_OBJECTID:
 				if h.Generation > rc.Chunk_root_generation {
 					continue loop
 				}
-				if ret = extract_metadata_record(rc, buf); ret {
+				if ret = extract_metadata_record(rc, buf); !ret {
 					break loop
 				}
 			}
