@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"syscall"
 )
 
@@ -115,35 +116,35 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 
 func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
 	verify bool, silent bool) bool {
-	//	char *result;
-	//	u32 len;
-	//	u32 crc = ~(u32)0;
-	//
-	//	result = malloc(csum_size * sizeof(char));
-	//	if (!result)
-	//		return 1;
-	//
-	//	len = buf->len - BTRFS_CSUM_SIZE;
-	//	crc = crc32c(crc, buf->data + BTRFS_CSUM_SIZE, len);
-	//	btrfs_csum_final(crc, result);
-	//
-	//	if (verify) {
-	//		if (memcmp_extent_buffer(buf, result, 0, csum_size)) {
-	//			if (!silent)
-	//				printk("checksum verify failed on %llu found %08X wanted %08X\n",
-	//				       (unsigned long long)buf->start,
-	//				       *((u32 *)result),
-	//				       *((u32*)(char *)buf->data));
-	//			free(result);
-	//			return 1;
-	//		}
-	//	} else {
-	//		write_extent_buffer(buf, result, 0, csum_size);
-	//	}
-	//	free(result);
-	//	return false
-	return true
+	var (
+		crc  uint32 = ^uint32(0)
+		csum uint32
+	)
+	bytebr := bytes.NewReader(buf.Data)
+	binary.Read(bytebr, binary.LittleEndian, csum)
 
+	table := crc32.MakeTable(crc32.Castagnoli)
+	crc = crc32.Update(crc, table, buf.Data[BTRFS_CSUM_SIZE:buf.Len])
+
+	if csum != crc {
+		if verify {
+			if !silent {
+				fmt.Errorf("checksum verify failed on %llu found %08X wanted %08X\n",
+					buf.Start,
+					crc,
+					csum)
+			}
+			return false
+		}
+	} else {
+		bytewbr := new(bytes.Buffer)
+		err := binary.Write(bytewbr, binary.LittleEndian, crc)
+		if err != nil {
+			fmt.Println("binary.Write failed:", err)
+		}
+		copy(buf.Data, bytewbr.Bytes())
+	}
+	return true
 }
 
 func verify_tree_block_csum_silent(buf *Extent_buffer, csum_size uint16) bool {
