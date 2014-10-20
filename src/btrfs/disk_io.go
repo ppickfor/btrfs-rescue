@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// calculate byte offset of superblock mirror wibble
+// calculate byte offset of superblock mirror in partition
 func btrfs_sb_offset(mirror int) uint64 {
 	var start uint64 = 16 * 1024
 	if mirror != 0 {
