@@ -50,11 +50,11 @@ func main() {
 		log.Fatal("read super block error\n")
 	}
 	fmt.Printf("\nSB: %+v\n", sb)
-	rc.Sectorsize = btrfs.U32(sb.Sectorsize)
-	rc.Leafsize = btrfs.U32(sb.Leafsize)
-	rc.Generation = btrfs.U64(sb.Generation)
-	rc.Chunk_root_generation = btrfs.U64(sb.Chunk_root_generation)
-	rc.Csum_size = btrfs.U16(btrfs.Btrfs_super_csum_size(&sb))
+	rc.Sectorsize = sb.Sectorsize
+	rc.Leafsize = sb.Leafsize
+	rc.Generation = sb.Generation
+	rc.Chunk_root_generation = sb.Chunk_root_generation
+	rc.Csum_size = btrfs.Btrfs_super_csum_size(&sb)
 	fmt.Printf("\nRC: %+v\n", rc)
 	var buf []byte = make([]byte, rc.Leafsize)
 	/* if seed, the result of scanning below will be partial */
