@@ -8,6 +8,10 @@ import (
 	"syscall"
 )
 
+var (
+	crc32c *crc32.Table = crc32.MakeTable(crc32.Castagnoli)
+)
+
 // calculate byte offset of superblock mirror in partition
 func btrfs_sb_offset(mirror int) uint64 {
 	var start uint64 = 16 * 1024
@@ -123,8 +127,7 @@ func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
 	bytebr := bytes.NewReader(buf.Data)
 	binary.Read(bytebr, binary.LittleEndian, csum)
 
-	table := crc32.MakeTable(crc32.Castagnoli)
-	crc = crc32.Update(crc, table, buf.Data[BTRFS_CSUM_SIZE:buf.Len])
+	crc = crc32.Update(crc, crc32c, buf.Data[BTRFS_CSUM_SIZE:buf.Len])
 
 	if csum != crc {
 		if verify {
