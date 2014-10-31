@@ -16,12 +16,12 @@ func main() {
 	tree.DeleteMin()
 	tree.Delete(llrb.Int(4))
 	fmt.Println("Ascend")
-	tree.AscendGreaterOrEqual(llrb.Int(-1), func(i llrb.Item) bool {
+	tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%v\n", i)
 		return true
 	})
 	fmt.Println("Descend")
-	tree.DescendLessOrEqual(llrb.Int(9999), func(i llrb.Item) bool {
+	tree.DescendLessOrEqual(llrb.Inf(1), func(i llrb.Item) bool {
 		fmt.Printf("%v\n", i)
 		return true
 	})

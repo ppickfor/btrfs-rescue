@@ -6,14 +6,45 @@ import (
 	"fmt"
 	"hash/crc32"
 	"syscall"
+	//	"unsafe"
 )
 
 var (
-	crc32c *crc32.Table = crc32.MakeTable(crc32.Castagnoli)
+	crc32c  = crc32.MakeTable(crc32.Castagnoli)
+	
 )
 
+func btrfs_scan_fs_devices(
+	fd int,
+	path string,
+	fs_devices **Btrfs_fs_devices,
+	sb_bytenr uint64,
+	run_ioctl bool,
+	super_recover bool) int {
+	//	u64 total_devs;
+	//	int ret;
+	//	if (!sb_bytenr)
+	//		sb_bytenr = BTRFS_SUPER_INFO_OFFSET;
+	//
+	//	ret = btrfs_scan_one_device(fd, path, fs_devices,
+	//				    &total_devs, sb_bytenr, super_recover);
+	//	if (ret) {
+	//		fprintf(stderr, "No valid Btrfs found on %s\n", path);
+	//		return ret;
+	//	}
+	//
+	//	if (total_devs != 1) {
+	//		ret = btrfs_scan_for_fsid(run_ioctl);
+	//		if (ret)
+	//			return ret;
+	//	}
+	return 0
+}
+
 // calculate byte offset of superblock mirror in partition
-func btrfs_sb_offset(mirror int) uint64 {
+func Btrfs_sb_offset(
+	mirror int) uint64 {
+
 	var start uint64 = 16 * 1024
 	if mirror != 0 {
 		return start << uint64(BTRFS_SUPER_MIRROR_SHIFT*mirror)
@@ -23,7 +54,12 @@ func btrfs_sb_offset(mirror int) uint64 {
 
 // reads super block into sb at offset sb_bytenr
 // if super_recover is != 0 the read superblock backups ad find latest generation
-func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_recover int) bool {
+func btrfs_read_dev_super(
+	fd int,
+	sb *Btrfs_super_block,
+	sb_bytenr uint64,
+	super_recover bool) bool {
+
 	var (
 		fsid                [BTRFS_FSID_SIZE]uint8
 		fsid_is_initialized bool = false
@@ -36,7 +72,7 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 		//		err                 error
 	)
 	buf = new(Btrfs_super_block)
-	if super_recover != 0 {
+	if super_recover {
 		max_super = BTRFS_SUPER_MIRROR_MAX
 	}
 	var size = binary.Size(buf)
@@ -67,7 +103,7 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 	for i := 0; i < max_super; i++ {
 		fmt.Printf("i: %v\n", i)
 
-		bytenr = int64(btrfs_sb_offset(i))
+		bytenr = int64(Btrfs_sb_offset(i))
 		fmt.Printf("bytenr: %v\n", bytenr)
 		ret, _ := syscall.Pread(fd, bytebuf, bytenr)
 		//fmt.Printf("err: %v, ret: %v. bytebuf: %v\n", err, ret, bytebuf)
@@ -78,6 +114,7 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
 		if buf.Bytenr != uint64(bytenr) {
 			fmt.Printf("bad bytent: should be %v not %v\n", bytenr, buf.Bytenr)
+			fmt.Printf("Super block:\n%+v\n", buf)
 			continue
 		}
 
@@ -102,6 +139,9 @@ func Btrfs_read_dev_super(fd int, sb *Btrfs_super_block, sb_bytenr U64, super_re
 			 */
 			fmt.Printf("bad fsid %x not %x\n", fsid, buf.Fsid)
 			continue
+		}
+		if !check_super(fd,uint64(bytenr), buf) {
+//			continue
 		}
 
 		if buf.Generation > transid {
@@ -152,4 +192,48 @@ func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
 
 func verify_tree_block_csum_silent(buf *Extent_buffer, csum_size uint16) bool {
 	return csum_tree_block_size(buf, csum_size, true, true)
+}
+
+func check_super(fd int ,bytenr uint64, sb *Btrfs_super_block) bool {
+
+	switch {
+	case sb.Bytenr != bytenr:
+		fmt.Printf("Bytenr mismatch calculated %v have %v\n", sb.Bytenr, bytenr)
+		return false
+	case sb.Magic != BTRFS_MAGIC:
+		fmt.Printf("Magic mismatch calculated %v have %v\n", sb.Magic, BTRFS_MAGIC)
+		return false
+	}
+	var (
+		crc  uint32 = ^uint32(0)
+//		crc  uint32 = uint32(0)
+		csum uint32
+	)
+	fmt.Printf("Reading crc32c\n")
+	bytebr := bytes.NewReader(sb.Csum[:])
+	binary.Read(bytebr, binary.LittleEndian, &csum)
+
+	fmt.Printf("Calculating crc32c\n")
+
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, *sb)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+	}
+	mybytes := make([]byte,4096)
+	ret, _ := syscall.Pread(fd, mybytes, int64(bytenr))
+	if ret != 4096 {
+		fmt.Printf("Pread failed\n")
+		
+	}
+
+	crc = crc32.Checksum( mybytes[BTRFS_CSUM_SIZE:],crc32c)
+	
+	if csum != crc {
+		fmt.Printf("Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum,len(mybytes),mybytes)
+		return true
+	}
+	fmt.Printf("Crc match calculated %08x have %08x\n", crc, csum)
+	return true
+	
 }
