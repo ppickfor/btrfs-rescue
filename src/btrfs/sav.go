@@ -878,3 +878,305 @@ import (
 	//		974986936320,
 	//	}
 	//	var empty []byte = make([]byte, btrfs.BTRFS_SIZE)
+// print some info while scanning for metadata of the fsid
+//func processBlock(bytenr uint64, header *btrfs.Btrfs_header, rc *btrfs.Recover_control, fsid []byte) {
+//
+//	if !btrfs.Is_super_block_address(uint64(bytenr)) {
+//		if btrfs.Btrfs_read_header(rc.Fd, header, bytenr) {
+//			if bytes.Equal(header.Fsid[:], fsid) {
+//				fmt.Printf("Btrfs header @%v:\n%+v\n\n", bytenr, header)
+//				decodeObjectID(int64(header.Owner))
+//
+//				if ret, items := btrfs.Btrfs_read_items(rc.Fd, header.Nritems, bytenr); ret {
+//					for _, item := range items {
+//						decodeKeyID(item.Key.Type)
+//					}
+//				}
+//			}
+//		}
+//	}
+//}
+
+//func decodeObjectID(id int64) {
+//	// Object IDS
+//	/* holds pointers to all of the tree roots */
+//	switch id {
+//	case btrfs.BTRFS_ROOT_TREE_OBJECTID:
+//		fmt.Println("BTRFS_ROOT_TREE_OBJECTID")
+//
+//	/* stores information about which extents are in use, and reference counts */
+//	case btrfs.BTRFS_EXTENT_TREE_OBJECTID:
+//		fmt.Println("BTRFS_EXTENT_TREE_OBJECTID")
+//
+//	/*
+//	 * chunk tree stores translations from logical -> physical block numbering
+//	 * the super block points to the chunk tree
+//	 */
+//	case btrfs.BTRFS_CHUNK_TREE_OBJECTID:
+//		fmt.Println("BTRFS_CHUNK_TREE_OBJECTID")
+//
+//	/*
+//	 * stores information about which areas of a given device are in use.
+//	 * one per device.  The tree of tree roots points to the device tree
+//	 */
+//	case btrfs.BTRFS_DEV_TREE_OBJECTID:
+//		fmt.Println("BTRFS_DEV_TREE_OBJECTID")
+//
+//	/* one per subvolume, storing files and directories */
+//	case btrfs.BTRFS_FS_TREE_OBJECTID:
+//		fmt.Println("BTRFS_FS_TREE_OBJECTID")
+//
+//	/* directory objectid inside the root tree */
+//	case btrfs.BTRFS_ROOT_TREE_DIR_OBJECTID:
+//		fmt.Println("BTRFS_ROOT_TREE_DIR_OBJECTID")
+//	/* holds checksums of all the data extents */
+//	case btrfs.BTRFS_CSUM_TREE_OBJECTID:
+//		fmt.Println("BTRFS_CSUM_TREE_OBJECTID")
+//	case btrfs.BTRFS_QUOTA_TREE_OBJECTID:
+//		fmt.Println("BTRFS_QUOTA_TREE_OBJECTID")
+//
+//	/* for storing items that use the BTRFS_UUID_KEY* */
+//	case btrfs.BTRFS_UUID_TREE_OBJECTID:
+//		fmt.Println("BTRFS_UUID_TREE_OBJECTID")
+//
+//	/* for storing balance parameters in the root tree */
+//	case btrfs.BTRFS_BALANCE_OBJECTID:
+//		fmt.Println("BTRFS_BALANCE_OBJECTID")
+//
+//	/* oprhan objectid for tracking unlinked/truncated files */
+//	case btrfs.BTRFS_ORPHAN_OBJECTID:
+//		fmt.Println("BTRFS_ORPHAN_OBJECTID")
+//
+//	/* does write ahead logging to speed up fsyncs */
+//	case btrfs.BTRFS_TREE_LOG_OBJECTID:
+//		fmt.Println("BTRFS_TREE_LOG_OBJECTID")
+//	case btrfs.BTRFS_TREE_LOG_FIXUP_OBJECTID:
+//		fmt.Println("BTRFS_TREE_LOG_FIXUP_OBJECTID")
+//
+//	/* space balancing */
+//	case btrfs.BTRFS_TREE_RELOC_OBJECTID:
+//		fmt.Println("BTRFS_TREE_RELOC_OBJECTID")
+//	case btrfs.BTRFS_DATA_RELOC_TREE_OBJECTID:
+//		fmt.Println("BTRFS_DATA_RELOC_TREE_OBJECTID")
+//
+//	/*
+//	 * extent checksums all have this objectid
+//	 * this allows them to share the logging tree
+//	 * for fsyncs
+//	 */
+//	case btrfs.BTRFS_EXTENT_CSUM_OBJECTID:
+//		fmt.Println("BTRFS_EXTENT_CSUM_OBJECTID")
+//
+//	/* For storing free space cache */
+//	case btrfs.BTRFS_FREE_SPACE_OBJECTID:
+//		fmt.Println("BTRFS_FREE_SPACE_OBJECTID")
+//
+//	/*
+//	 * The inode number assigned to the special inode for sotring
+//	 * free ino cache
+//	 */
+//	case btrfs.BTRFS_FREE_INO_OBJECTID:
+//		fmt.Println("BTRFS_FREE_INO_OBJECTID")
+//
+//	/* dummy objectid represents multiple objectids */
+//	case btrfs.BTRFS_MULTIPLE_OBJECTIDS:
+//		fmt.Println("BTRFS_MULTIPLE_OBJECTIDS")
+//
+//	/*
+//	 * All files have objectids in this range.
+//	 */
+//	//	case btrfs.BTRFS_FIRST_FREE_OBJECTID:
+//	//		fmt.Println("BTRFS_FIRST_FREE_OBJECTID")
+//	//	case btrfs.BTRFS_LAST_FREE_OBJECTID:
+//	//		fmt.Println("BTRFS_LAST_FREE_OBJECTID")
+//	//	case btrfs.BTRFS_FIRST_CHUNK_TREE_OBJECTID:
+//	//		fmt.Println("BTRFS_FIRST_CHUNK_TREE_OBJECTID")
+//	//
+//	//	/*
+//	//	 * the device items go into the chunk tree.  The key is in the form
+//	//	 * [ 1 BTRFS_DEV_ITEM_KEY device_id ]
+//	//	 */
+//	//	case btrfs.BTRFS_DEV_ITEMS_OBJECTID:
+//	//		fmt.Println("BTRFS_DEV_ITEMS_OBJECTID")
+//	default:
+//		if (id > 0 && id > btrfs.BTRFS_FIRST_FREE_OBJECTID) || (id < 0 && id < btrfs.BTRFS_LAST_FREE_OBJECTID) {
+//			fmt.Printf("Numbered Object %08x\n", uint64(id))
+//		} else {
+//			fmt.Println("UNKNOWN OBJECTID")
+//
+//		}
+//	}
+//}
+//
+//func decodeKeyID(id uint8) {
+//	/*
+//	 * inode items have the data typically returned from stat and store other
+//	 * info about object characteristics.  There is one for every file and dir in
+//	 * the FS
+//	 */
+//	switch id {
+//	case btrfs.BTRFS_INODE_ITEM_KEY:
+//		fmt.Println("BTRFS_INODE_ITEM_KEY")
+//	case btrfs.BTRFS_INODE_REF_KEY:
+//		fmt.Println("BTRFS_INODE_REF_KEY")
+//	case btrfs.BTRFS_INODE_EXTREF_KEY:
+//		fmt.Println("BTRFS_INODE_EXTREF_KEY")
+//	case btrfs.BTRFS_XATTR_ITEM_KEY:
+//		fmt.Println("BTRFS_XATTR_ITEM_KEY")
+//	case btrfs.BTRFS_ORPHAN_ITEM_KEY:
+//		fmt.Println("BTRFS_ORPHAN_ITEM_KEY")
+//
+//	case btrfs.BTRFS_DIR_LOG_ITEM_KEY:
+//		fmt.Println("BTRFS_DIR_LOG_ITEM_KEY")
+//	case btrfs.BTRFS_DIR_LOG_INDEX_KEY:
+//		fmt.Println("BTRFS_DIR_LOG_INDEX_KEY")
+//	/*
+//	 * dir items are the name -> inode pointers in a directory.  There is one
+//	 * for every name in a directory.
+//	 */
+//	case btrfs.BTRFS_DIR_ITEM_KEY:
+//		fmt.Println("BTRFS_DIR_ITEM_KEY")
+//	case btrfs.BTRFS_DIR_INDEX_KEY:
+//		fmt.Println("BTRFS_DIR_INDEX_KEY")
+//
+//	/*
+//	 * extent data is for file data
+//	 */
+//	case btrfs.BTRFS_EXTENT_DATA_KEY:
+//		fmt.Println("BTRFS_EXTENT_DATA_KEY")
+//
+//	/*
+//	 * csum items have the checksums for data in the extents
+//	 */
+//	case btrfs.BTRFS_CSUM_ITEM_KEY:
+//		fmt.Println("BTRFS_CSUM_ITEM_KEY")
+//	/*
+//	 * extent csums are stored in a separate tree and hold csums for
+//	 * an entire extent on disk.
+//	 */
+//	case btrfs.BTRFS_EXTENT_CSUM_KEY:
+//		fmt.Println("BTRFS_EXTENT_CSUM_KEY")
+//
+//	/*
+//	 * root items point to tree roots.  There are typically in the root
+//	 * tree used by the super block to find all the other trees
+//	 */
+//	case btrfs.BTRFS_ROOT_ITEM_KEY:
+//		fmt.Println("BTRFS_ROOT_ITEM_KEY")
+//
+//	/*
+//	 * root backrefs tie subvols and snapshots to the directory entries that
+//	 * reference them
+//	 */
+//	case btrfs.BTRFS_ROOT_BACKREF_KEY:
+//		fmt.Println("BTRFS_ROOT_BACKREF_KEY")
+//
+//	/*
+//	 * root refs make a fast index for listing all of the snapshots and
+//	 * subvolumes referenced by a given root.  They point directly to the
+//	 * directory item in the root that references the subvol
+//	 */
+//	case btrfs.BTRFS_ROOT_REF_KEY:
+//		fmt.Println("BTRFS_ROOT_REF_KEY")
+//
+//	/*
+//	 * extent items are in the extent map tree.  These record which blocks
+//	 * are used, and how many references there are to each block
+//	 */
+//	case btrfs.BTRFS_EXTENT_ITEM_KEY:
+//		fmt.Println("BTRFS_EXTENT_ITEM_KEY")
+//
+//	/*
+//	 * The same as the BTRFS_EXTENT_ITEM_KEY, except it's metadata we already know
+//	 * the length, so we save the level in key->offset instead of the length.
+//	 */
+//	case btrfs.BTRFS_METADATA_ITEM_KEY:
+//		fmt.Println("BTRFS_METADATA_ITEM_KEY")
+//
+//	case btrfs.BTRFS_TREE_BLOCK_REF_KEY:
+//		fmt.Println("BTRFS_TREE_BLOCK_REF_KEY")
+//
+//	case btrfs.BTRFS_EXTENT_DATA_REF_KEY:
+//		fmt.Println("BTRFS_EXTENT_DATA_REF_KEY")
+//
+//	/* old style extent backrefs */
+//	case btrfs.BTRFS_EXTENT_REF_V0_KEY:
+//		fmt.Println("BTRFS_EXTENT_REF_V0_KEY")
+//
+//	case btrfs.BTRFS_SHARED_BLOCK_REF_KEY:
+//		fmt.Println("BTRFS_SHARED_BLOCK_REF_KEY")
+//
+//	case btrfs.BTRFS_SHARED_DATA_REF_KEY:
+//		fmt.Println("BTRFS_SHARED_DATA_REF_KEY")
+//
+//	/*
+//	 * block groups give us hints into the extent allocation trees.  Which
+//	 * blocks are free etc etc
+//	 */
+//	case btrfs.BTRFS_BLOCK_GROUP_ITEM_KEY:
+//		fmt.Println("BTRFS_BLOCK_GROUP_ITEM_KEY")
+//
+//	case btrfs.BTRFS_DEV_EXTENT_KEY:
+//		fmt.Println("BTRFS_DEV_EXTENT_KEY")
+//	case btrfs.BTRFS_DEV_ITEM_KEY:
+//		fmt.Println("BTRFS_DEV_ITEM_KEY")
+//	case btrfs.BTRFS_CHUNK_ITEM_KEY:
+//		fmt.Println("BTRFS_CHUNK_ITEM_KEY")
+//
+//	case btrfs.BTRFS_BALANCE_ITEM_KEY:
+//		fmt.Println("BTRFS_BALANCE_ITEM_KEY")
+//
+//	/*
+//	 * quota groups
+//	 */
+//	case btrfs.BTRFS_QGROUP_STATUS_KEY:
+//		fmt.Println("BTRFS_QGROUP_STATUS_KEY")
+//	case btrfs.BTRFS_QGROUP_INFO_KEY:
+//		fmt.Println("BTRFS_QGROUP_INFO_KEY")
+//	case btrfs.BTRFS_QGROUP_LIMIT_KEY:
+//		fmt.Println("BTRFS_QGROUP_LIMIT_KEY")
+//	case btrfs.BTRFS_QGROUP_RELATION_KEY:
+//		fmt.Println("BTRFS_QGROUP_RELATION_KEY")
+//
+//	/*
+//	 * Persistently stores the io stats in the device tree.
+//	 * One key for all stats, (0, BTRFS_DEV_STATS_KEY, devid).
+//	 */
+//	case btrfs.BTRFS_DEV_STATS_KEY:
+//		fmt.Println("BTRFS_DEV_STATS_KEY")
+//
+//	/*
+//	 * Persistently stores the device replace state in the device tree.
+//	 * The key is built like this: (0, BTRFS_DEV_REPLACE_KEY, 0).
+//	 */
+//	case btrfs.BTRFS_DEV_REPLACE_KEY:
+//		fmt.Println("BTRFS_DEV_REPLACE_KEY")
+//
+//		/*
+//		 * Stores items that allow to quickly map UUIDs to something else.
+//		 * These items are part of the filesystem UUID tree.
+//		 * The key is built like this:
+//		 * (UUID_upper_64_bits, BTRFS_UUID_KEY*, UUID_lower_64_bits).
+//		 */
+//		//#if BTRFS_UUID_SIZE != 16
+//		//#error "UUID items require case btrfs.BTRFS_UUID_SIZE:
+//		fmt.Println("BTRFS_UUID_SIZE")
+//	//#endif
+//	case btrfs.BTRFS_UUID_KEY_SUBVOL:
+//		fmt.Println("BTRFS_UUID_KEY_SUBVOL")
+//	case btrfs.BTRFS_UUID_KEY_RECEIVED_SUBVOL:
+//		fmt.Println("BTRFS_UUID_KEY_RECEIVED_SUBVOL")
+//		/* received subvols */
+//
+//	/*
+//	 * string items are for debugging.  They just store a short string of
+//	 * data in the FS
+//	 */
+//	case btrfs.BTRFS_STRING_ITEM_KEY:
+//		fmt.Println("BTRFS_STRING_ITEM_KEY")
+//		//	default:
+//		//		fmt.Println("UNKNOWN ITEM KEY ID")
+//
+//	}
+//}
+//

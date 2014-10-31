@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"hash/crc32"
-	//	"log"
 	"os"
 	"syscall"
 )
@@ -312,7 +309,7 @@ func Btrfs_read_treeblock(
 	fsid []byte,
 	byteblock *[]byte,
 ) (bool, error) {
-	csum := uint32(0)
+//	csum := uint32(0)
 
 	ret, err := syscall.Pread(fd, *byteblock, int64(bytenr))
 	if err != nil {
@@ -322,14 +319,8 @@ func Btrfs_read_treeblock(
 		err = errors.New("Pread: not all bytes read")
 		return false, err
 	}
+	//	fmt.Printf("byteblock: %v\n", byteblock)
 	if bytes.Equal((*byteblock)[32:32+16], fsid) {
-		bytebr := bytes.NewReader(*byteblock)
-		binary.Read(bytebr, binary.LittleEndian, &csum)
-		crc := crc32.Checksum((*byteblock)[BTRFS_CSUM_SIZE:], crc32c)
-		if crc != csum {
-			fmt.Printf("crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
-		}
-		//		fmt.Printf("read treeblock @%d, %v\n",bytenr,(*byteblock)[0:4])
 		return true, nil
 	}
 	return false, nil

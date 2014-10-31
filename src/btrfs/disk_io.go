@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	crc32c  = crc32.MakeTable(crc32.Castagnoli)
+	Crc32c  = crc32.MakeTable(crc32.Castagnoli)
 	
 )
 
@@ -167,7 +167,7 @@ func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
 	bytebr := bytes.NewReader(buf.Data)
 	binary.Read(bytebr, binary.LittleEndian, csum)
 
-	crc = crc32.Update(crc, crc32c, buf.Data[BTRFS_CSUM_SIZE:buf.Len])
+	crc = crc32.Update(crc, Crc32c, buf.Data[BTRFS_CSUM_SIZE:buf.Len])
 
 	if csum != crc {
 		if verify {
@@ -227,7 +227,7 @@ func check_super(fd int ,bytenr uint64, sb *Btrfs_super_block) bool {
 		
 	}
 
-	crc = crc32.Checksum( mybytes[BTRFS_CSUM_SIZE:],crc32c)
+	crc = crc32.Checksum( mybytes[BTRFS_CSUM_SIZE:],Crc32c)
 	
 	if csum != crc {
 		fmt.Printf("Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum,len(mybytes),mybytes)
