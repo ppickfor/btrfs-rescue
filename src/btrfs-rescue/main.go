@@ -30,62 +30,6 @@ var (
 	bytenrFlag      *string = flag.String("b", "", "The previously scanned block bytenrs")
 )
 
-// isAlphaNum reports whether the byte is an ASCII letter, number, or underscore
-func isAlphaNum(c uint8) bool {
-	return c == '_' || '0' <= c && c <= '9' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
-}
-
-// NewExtentRecord creates a new extenet record from the block header and the Leaf size in recover control
-func NewExtentRecord(header *BtrfsHeader, rc *RecoverControl) *ExtentRecord {
-	return &ExtentRecord{
-		CacheExtent: CacheExtent{Start: header.Bytenr, Size: uint64(rc.Leafsize)},
-		Generation:  header.Generation,
-		Csum:        header.Csum,
-	}
-}
-
-// NewBlockGroupRecord create a new block group record from the a block heade, a block group ietem key and the items byte buffer
-func NewBlockGroupRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *BlockGroupRecord {
-
-	key := item.Key
-	itemPtr := itemsBuf[item.Offset:]
-	bytereader := bytes.NewReader(itemPtr)
-	bgItem := new(BtrfsBlockGroupItem)
-	_ = binary.Read(bytereader, binary.LittleEndian, bgItem)
-	//	fmt.Printf("bgItem: %+v\n", bgItem)
-	this := &BlockGroupRecord{
-		CacheExtent: CacheExtent{Start: key.Objectid, Size: key.Offset},
-		Generation:  generation,
-		Objectid:    key.Objectid,
-		Type:        key.Type,
-		Offset:      key.Offset,
-		Flags:       bgItem.Flags,
-	}
-	return this
-}
-
-// NewDeviceExtentRecord create a new device extent record from the a block header, a device extent item key and the items byte buffer
-func NewDeviceExtentRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *DeviceExtentRecord {
-
-	key := item.Key
-	itemPtr := itemsBuf[item.Offset:]
-	bytereader := bytes.NewReader(itemPtr)
-	deItem := new(BtrfsDevExtent)
-	_ = binary.Read(bytereader, binary.LittleEndian, deItem)
-	//	fmt.Printf("bgItem: %+v\n", bgItem)
-	this := &DeviceExtentRecord{
-		CacheExtent:   CacheExtent{Objectid: key.Objectid, Start: key.Offset, Size: deItem.Length},
-		Generation:    generation,
-		Objectid:      key.Objectid,
-		Type:          key.Type,
-		Offset:        key.Offset,
-		ChunkObjectid: deItem.Chunk_Objectid,
-		ChunkOffset:   deItem.Chunk_Offset,
-		Length:        deItem.Length,
-	}
-	return this
-}
-
 type treeBlock struct {
 	bytenr    uint64
 	byteblock []byte

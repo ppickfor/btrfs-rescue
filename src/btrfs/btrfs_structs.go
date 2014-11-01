@@ -3,7 +3,9 @@
 package btrfs
 
 import (
+	"bytes"
 	"container/list"
+	"encoding/binary"
 	"github.com/petar/GoLLRB/llrb"
 )
 
@@ -40,6 +42,26 @@ type BlockGroupRecord struct {
 	Type       uint8
 	Offset     uint64
 	Flags      uint64
+}
+
+// NewBlockGroupRecord create a new block group record from the a block heade, a block group ietem key and the items byte buffer
+func NewBlockGroupRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *BlockGroupRecord {
+
+	key := item.Key
+	itemPtr := itemsBuf[item.Offset:]
+	bytereader := bytes.NewReader(itemPtr)
+	bgItem := new(BtrfsBlockGroupItem)
+	_ = binary.Read(bytereader, binary.LittleEndian, bgItem)
+	//	fmt.Printf("bgItem: %+v\n", bgItem)
+	this := &BlockGroupRecord{
+		CacheExtent: CacheExtent{Start: key.Objectid, Size: key.Offset},
+		Generation:  generation,
+		Objectid:    key.Objectid,
+		Type:        key.Type,
+		Offset:      key.Offset,
+		Flags:       bgItem.Flags,
+	}
+	return this
 }
 
 func (x *BlockGroupRecord) Less(y llrb.Item) bool {
@@ -97,6 +119,28 @@ type DeviceExtentRecord struct {
 	ChunkObjectid uint64
 	ChunkOffset   uint64
 	Length        uint64
+}
+
+// NewDeviceExtentRecord create a new device extent record from the a block header, a device extent item key and the items byte buffer
+func NewDeviceExtentRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *DeviceExtentRecord {
+
+	key := item.Key
+	itemPtr := itemsBuf[item.Offset:]
+	bytereader := bytes.NewReader(itemPtr)
+	deItem := new(BtrfsDevExtent)
+	_ = binary.Read(bytereader, binary.LittleEndian, deItem)
+	//	fmt.Printf("bgItem: %+v\n", bgItem)
+	this := &DeviceExtentRecord{
+		CacheExtent:   CacheExtent{Objectid: key.Objectid, Start: key.Offset, Size: deItem.Length},
+		Generation:    generation,
+		Objectid:      key.Objectid,
+		Type:          key.Type,
+		Offset:        key.Offset,
+		ChunkObjectid: deItem.Chunk_Objectid,
+		ChunkOffset:   deItem.Chunk_Offset,
+		Length:        deItem.Length,
+	}
+	return this
 }
 
 // Less compares device extents first by Objectid (device) the start range in thelook left red blakc tree
@@ -967,6 +1011,15 @@ type ExtentRecord struct {
 	Devices    [BTRFS_MAX_MIRRORS](*BtrfsDevice)
 	Offsets    [BTRFS_MAX_MIRRORS]uint64
 	Nmirrors   uint32
+}
+
+// NewExtentRecord creates a new extenet record from the block header and the Leaf size in recover control
+func NewExtentRecord(header *BtrfsHeader, rc *RecoverControl) *ExtentRecord {
+	return &ExtentRecord{
+		CacheExtent: CacheExtent{Start: header.Bytenr, Size: uint64(rc.Leafsize)},
+		Generation:  header.Generation,
+		Csum:        header.Csum,
+	}
 }
 
 func (x *ExtentRecord) Less(y llrb.Item) bool {
