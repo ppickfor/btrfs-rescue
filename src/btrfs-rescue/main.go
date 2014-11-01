@@ -139,6 +139,7 @@ loop:
 	close(csumBlockChan)
 }
 
+// csumByteblock check crc of the treeBlocks byte buffer implemented as a channel filter
 func csumByteblock(in <-chan (treeBlock), out chan<- (treeBlock)) {
 	//	var inc,outc,ins,outs int
 	for treeBlock := range in {
@@ -165,6 +166,7 @@ func csumByteblock(in <-chan (treeBlock), out chan<- (treeBlock)) {
 
 // headerConsumer reads blocks from headerBlockchan and processes them via detailBlock
 func headerConsumer(headerBlockchan <-chan (treeBlock), itemBlockChan chan itemBlock, rc *RecoverControl) {
+
 	// process treeblock from goroutine via channel
 	for treeBlock := range headerBlockchan {
 		//			treeBlock = treeBlock
@@ -226,6 +228,7 @@ again:
 
 // processItems reads items from itemBlockChan and processes the leaves
 func processItems(itemBlockChan chan (itemBlock), rc *RecoverControl) {
+
 	// process items in new treeblock
 	for itemBlock := range itemBlockChan {
 		level := itemBlock.Level
@@ -324,6 +327,7 @@ again:
 
 // processDeviceExtentItem creates a new device extent record and update the cache by latest generation
 func processDeviceExtentItem(devextCache *DeviceExtentTree, generation uint64, item *BtrfsItem, itemBuf []byte) {
+
 	rec := NewDeviceExtentRecord(generation, item, itemBuf)
 again:
 	if devextCache.Tree.Has(rec) {
