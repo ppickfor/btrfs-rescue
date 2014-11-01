@@ -109,7 +109,7 @@ const (
 
 	/*
 	 * the device items go into the chunk tree.  The key is in the form
-	 * [ 1 BTRFS_DEV_ITEM_KEY device_id ]
+	 * [ 1 BTRFS_DEV_ITEM_KEY deviceId ]
 	 */
 	BTRFS_DEV_ITEMS_OBJECTID = 1
 
@@ -226,7 +226,7 @@ const (
 	 * Stores items that allow to quickly map UUIDs to something else.
 	 * These items are part of the filesystem UUID tree.
 	 * The key is built like this:
-	 * (UUID_upper_64_bits, BTRFS_UUID_KEY*, UUID_lower_64_bits).
+	 * (UUIDUpper_64Bits, BTRFS_UUID_KEY*, UUIDLower_64Bits).
 	 */
 	//#if BTRFS_UUID_SIZE != 16
 	//#error "UUID items require BTRFS_UUID_SIZE == 16!"
@@ -255,11 +255,7 @@ type (
 )
 
 // read header struct from fd at bytenr
-func Btrfs_read_header(
-	fd int,
-	header *Btrfs_header,
-	bytenr uint64,
-) bool {
+func BtrfsReadHeader(fd int, header *BtrfsHeader, bytenr uint64) bool {
 
 	var size = binary.Size(header)
 	var byteheader = make([]byte, size)
@@ -276,14 +272,10 @@ func Btrfs_read_header(
 }
 
 // read items structs from fd at bytenr
-func Btrfs_read_items(
-	fd int,
-	n uint32,
-	bytenr uint64,
-) (bool, []Btrfs_item) {
-	header := new(Btrfs_header)
-	item := new(Btrfs_item)
-	myitems := make([]Btrfs_item, n)
+func BtrfsReadItems(fd int, n uint32, bytenr uint64) (bool, []BtrfsItem) {
+	header := new(BtrfsHeader)
+	item := new(BtrfsItem)
+	myitems := make([]BtrfsItem, n)
 	var hsize = binary.Size(header)
 	var isize = binary.Size(item)
 	var byteitems = make([]byte, uint32(isize)*n)
@@ -302,14 +294,8 @@ func Btrfs_read_items(
 
 }
 
-func Btrfs_read_treeblock(
-	fd int,
-	bytenr uint64,
-	size uint64,
-	fsid []byte,
-	byteblock *[]byte,
-) (bool, error) {
-//	csum := uint32(0)
+func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblock *[]byte) (bool, error) {
+	//	csum := uint32(0)
 
 	ret, err := syscall.Pread(fd, *byteblock, int64(bytenr))
 	if err != nil {

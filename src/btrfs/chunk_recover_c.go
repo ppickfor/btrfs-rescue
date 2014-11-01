@@ -1,6 +1,7 @@
 package btrfs
 
 import (
+	"container/list"
 	"fmt"
 	"github.com/petar/GoLLRB/llrb"
 	"log"
@@ -9,46 +10,39 @@ import (
 	"unsafe"
 )
 
-func Is_super_block_address(offset uint64) bool {
+func IsSuperBlockAddress(offset uint64) bool {
 	var i int
 
 	for i = 0; i < BTRFS_SUPER_MIRROR_MAX; i++ {
-		if offset == Btrfs_sb_offset(i) {
+		if offset == BtrfsSbOffset(i) {
 			return true
 		}
 	}
 	return false
 }
-func Init_recover_control(rc *Recover_control, verbose bool,
-	yes bool) {
-	//	memset(rc, 0, sizeof(struct recover_control));
-	//	cache_tree_init(&rc->chunk);
-	//	cache_tree_init(&rc->eb_cache);
-	//	block_group_tree_init(&rc->bg);
-	//	device_extent_tree_init(&rc->devext);
-	//
-	//	INIT_LIST_HEAD(&rc->good_chunks);
-	//	INIT_LIST_HEAD(&rc->bad_chunks);
-	//	INIT_LIST_HEAD(&rc->unrepaired_chunks);
-	//
-	rc.Chunk = llrb.New()
-	rc.Eb_cache = llrb.New()
-	rc.Bg.Tree = llrb.New()
-	rc.Bg.Block_Groups = List_head{Next: &rc.Bg.Block_Groups, Prev: &rc.Bg.Block_Groups}
-	rc.Devext.Tree = llrb.New()
-	rc.Devext.Chunk_orphans = List_head{Next: &rc.Devext.Chunk_orphans, Prev: &rc.Devext.Chunk_orphans}
-	rc.Devext.Device_orphans = List_head{Next: &rc.Devext.Device_orphans, Prev: &rc.Devext.Device_orphans}
+func NewRecoverControl(verbose bool, yes bool) *RecoverControl {
 
-	rc.Verbose = verbose
-	rc.Yes = yes
-	//	pthread_mutex_init(&rc->rc_lock, NULL);
+	return &RecoverControl{
+		Chunk:   llrb.New(),
+		EbCache: llrb.New(),
+		Bg: BlockGroupTree{Tree: llrb.New(),
+			Block_Groups: list.New(),
+		},
+		Devext: DeviceExtentTree{Tree: llrb.New(),
+			ChunkOrphans:  list.New(),
+			DeviceOrphans: list.New(),
+		},
+		Verbose: verbose,
+		Yes:     yes,
+	}
+	//	pthreadMutexInit(&rc->rcLock, NULL);
 }
 
-func Recover_prepare(rc *Recover_control, path string) bool {
+func RecoverPrepare(rc *RecoverControl, path string) bool {
 	//	int ret;
 	//	int fd;
-	//	struct btrfs_super_block *sb;
-	//	struct btrfs_fs_devices *fs_devices;
+	//	struct btrfsSuperBlock *sb;
+	//	struct btrfsFsDevices *fsDevices;
 	//
 	//	ret = 0;
 	//	fd = open(path, O_RDONLY);
@@ -57,53 +51,53 @@ func Recover_prepare(rc *Recover_control, path string) bool {
 	//		return -1;
 	//	}
 	//
-	//	sb = malloc(sizeof(struct btrfs_super_block));
+	//	sb = malloc(sizeof(struct btrfsSuperBlock));
 	//	if (!sb) {
 	//		fprintf(stderr, "allocating memory for sb failed.\n");
 	//		ret = -ENOMEM;
-	//		goto fail_close_fd;
+	//		goto failCloseFd;
 	//	}
 	//
-	//	ret = btrfs_read_dev_super(fd, sb, BTRFS_SUPER_INFO_OFFSET, 1);
+	//	ret = btrfsReadDevSuper(fd, sb, BTRFS_SUPER_INFO_OFFSET, 1);
 	//	if (ret) {
 	//		fprintf(stderr, "read super block error\n");
-	//		goto fail_free_sb;
+	//		goto failFreeSb;
 	//	}
 	//
-	//	rc->sectorsize = btrfs_super_sectorsize(sb);
-	//	rc->leafsize = btrfs_super_leafsize(sb);
-	//	rc->generation = btrfs_super_generation(sb);
-	//	rc->chunk_root_generation = btrfs_super_chunk_root_generation(sb);
-	//	rc->csum_size = btrfs_super_csum_size(sb);
+	//	rc->sectorsize = btrfsSuperSectorsize(sb);
+	//	rc->leafsize = btrfsSuperLeafsize(sb);
+	//	rc->generation = btrfsSuperGeneration(sb);
+	//	rc->chunkRootGeneration = btrfsSuperChunkRootGeneration(sb);
+	//	rc->csumSize = btrfsSuperCsumSize(sb);
 	//
 	//	/* if seed, the result of scanning below will be partial */
-	//	if (btrfs_super_flags(sb) & BTRFS_SUPER_FLAG_SEEDING) {
+	//	if (btrfsSuperFlags(sb) & BTRFS_SUPER_FLAG_SEEDING) {
 	//		fprintf(stderr, "this device is seed device\n");
 	//		ret = -1;
-	//		goto fail_free_sb;
+	//		goto failFreeSb;
 	//	}
 	//
-	//	ret = btrfs_scan_fs_devices(fd, path, &fs_devices, 0, 1, 1);
+	//	ret = btrfsScanFsDevices(fd, path, &fsDevices, 0, 1, 1);
 	//	if (ret)
-	//		goto fail_free_sb;
+	//		goto failFreeSb;
 	//
-	//	rc->fs_devices = fs_devices;
+	//	rc->fsDevices = fsDevices;
 	//
 	//	if (rc->verbose)
-	//		print_all_devices(&rc->fs_devices->devices);
+	//		printAllDevices(&rc->fsDevices->devices);
 	//
-	//fail_free_sb:
+	//failFreeSb:
 	//	free(sb);
-	//fail_close_fd:
+	//failCloseFd:
 	//	close(fd);
 	//	return ret;
-	var sb Btrfs_super_block
+	var sb BtrfsSuperBlock
 	fd, err := syscall.Open(path, 0, 0)
 	if err != nil {
 		log.Fatal(os.NewSyscallError("open", err))
 	}
 	rc.Fd = fd
-	ret := btrfs_read_dev_super(fd, &sb, BTRFS_SUPER_INFO_OFFSET, true)
+	ret := btrfsReadDevSuper(fd, &sb, BTRFS_SUPER_INFO_OFFSET, true)
 	if !ret {
 		fmt.Errorf("read super block error\n")
 	} else {
@@ -111,8 +105,8 @@ func Recover_prepare(rc *Recover_control, path string) bool {
 		rc.Sectorsize = sb.Sectorsize
 		rc.Leafsize = sb.Leafsize
 		rc.Generation = sb.Generation
-		rc.Chunk_root_generation = sb.Chunk_root_generation
-		rc.Csum_size = Btrfs_super_csum_size(&sb)
+		rc.ChunkRootGeneration = sb.ChunkRootGeneration
+		rc.CsumSize = BtrfsSuperCsumSize(&sb)
 		rc.Fsid = sb.Fsid
 		fmt.Printf("\nRC: %+v\n", rc)
 		//		var buf []byte = make([]byte, rc.Leafsize)
@@ -128,46 +122,43 @@ func Recover_prepare(rc *Recover_control, path string) bool {
 /*
  * Return 0 when succesful, < 0 on error and > 0 if aborted by user
  */
-func btrfs_recover_chunk_tree(path []byte, verbose bool, yes bool) int {
+func btrfsRecoverChunkTree(path []byte, verbose bool, yes bool) int {
 	//	int ret = 0;
-	//	struct btrfs_root *root = NULL;
-	//	struct btrfs_trans_handle *trans;
-	var (
-		rc = new(Recover_control)
-	)
+	//	struct btrfsRoot *root = NULL;
+	//	struct btrfsTransHandle *trans;
 	//
-	Init_recover_control(rc, verbose, yes)
+	//	rc := NewRecoverControl( verbose, yes)
 	//
-	//	ret = recover_prepare(&rc, path);
+	//	ret = recoverPrepare(&rc, path);
 	//	if (ret) {
 	//		fprintf(stderr, "recover prepare error\n");
 	//		return ret;
 	//	}
 	//
-	//	ret = scan_devices(&rc);
+	//	ret = scanDevices(&rc);
 	//	if (ret) {
 	//		fprintf(stderr, "scan chunk headers error\n");
-	//		goto fail_rc;
+	//		goto failRc;
 	//	}
 	//
-	//	if (cache_tree_empty(&rc.chunk) &&
-	//	    cache_tree_empty(&rc.bg.tree) &&
-	//	    cache_tree_empty(&rc.devext.tree)) {
+	//	if (cacheTreeEmpty(&rc.chunk) &&
+	//	    cacheTreeEmpty(&rc.bg.tree) &&
+	//	    cacheTreeEmpty(&rc.devext.tree)) {
 	//		fprintf(stderr, "no recoverable chunk\n");
-	//		goto fail_rc;
+	//		goto failRc;
 	//	}
 	//
-	//	print_scan_result(&rc);
+	//	printScanResult(&rc);
 	//
-	//	ret = check_chunks(&rc.chunk, &rc.bg, &rc.devext, &rc.good_chunks,
-	//			   &rc.bad_chunks, 1);
-	//	print_check_result(&rc);
+	//	ret = checkChunks(&rc.chunk, &rc.bg, &rc.devext, &rc.goodChunks,
+	//			   &rc.badChunks, 1);
+	//	printCheckResult(&rc);
 	//	if (ret) {
-	//		if (!list_empty(&rc.bg.block_groups) ||
-	//		    !list_empty(&rc.devext.no_chunk_orphans)) {
-	//			ret = btrfs_recover_chunks(&rc);
+	//		if (!listEmpty(&rc.bg.blockGroups) ||
+	//		    !listEmpty(&rc.devext.noChunkOrphans)) {
+	//			ret = btrfsRecoverChunks(&rc);
 	//			if (ret)
-	//				goto fail_rc;
+	//				goto failRc;
 	//		}
 	//		/*
 	//		 * If the chunk is healthy, its block group item and device
@@ -178,73 +169,73 @@ func btrfs_recover_chunk_tree(path []byte, verbose bool, yes bool) int {
 	//		 */
 	//	} else {
 	//		fprintf(stderr, "Check chunks successfully with no orphans\n");
-	//		goto fail_rc;
+	//		goto failRc;
 	//	}
 	//
-	//	root = open_ctree_with_broken_chunk(&rc);
+	//	root = openCtreeWithBrokenChunk(&rc);
 	//	if (IS_ERR(root)) {
 	//		fprintf(stderr, "open with broken chunk error\n");
 	//		ret = PTR_ERR(root);
-	//		goto fail_rc;
+	//		goto failRc;
 	//	}
 	//
-	//	ret = check_all_chunks_by_metadata(&rc, root);
+	//	ret = checkAllChunksByMetadata(&rc, root);
 	//	if (ret) {
 	//		fprintf(stderr, "The chunks in memory can not match the metadata of the fs. Repair failed.\n");
-	//		goto fail_close_ctree;
+	//		goto failCloseCtree;
 	//	}
 	//
-	//	ret = btrfs_rebuild_ordered_data_chunk_stripes(&rc, root);
+	//	ret = btrfsRebuildOrderedDataChunkStripes(&rc, root);
 	//	if (ret) {
 	//		fprintf(stderr, "Failed to rebuild ordered chunk stripes.\n");
-	//		goto fail_close_ctree;
+	//		goto failCloseCtree;
 	//	}
 	//
 	//	if (!rc.yes) {
-	//		ret = ask_user("We are going to rebuild the chunk tree on disk, it might destroy the old metadata on the disk, Are you sure?");
+	//		ret = askUser("We are going to rebuild the chunk tree on disk, it might destroy the old metadata on the disk, Are you sure?");
 	//		if (!ret) {
 	//			ret = 1;
-	//			goto fail_close_ctree;
+	//			goto failCloseCtree;
 	//		}
 	//	}
 	//
-	//	trans = btrfs_start_transaction(root, 1);
-	//	ret = remove_chunk_extent_item(trans, &rc, root);
+	//	trans = btrfsStartTransaction(root, 1);
+	//	ret = removeChunkExtentItem(trans, &rc, root);
 	//	BUG_ON(ret);
 	//
-	//	ret = rebuild_chunk_tree(trans, &rc, root);
+	//	ret = rebuildChunkTree(trans, &rc, root);
 	//	BUG_ON(ret);
 	//
-	//	ret = rebuild_sys_array(&rc, root);
+	//	ret = rebuildSysArray(&rc, root);
 	//	BUG_ON(ret);
 	//
-	//	btrfs_commit_transaction(trans, root);
-	//fail_close_ctree:
-	//	close_ctree(root);
-	//fail_rc:
-	//	free_recover_control(&rc);
+	//	btrfsCommitTransaction(trans, root);
+	//failCloseCtree:
+	//	closeCtree(root);
+	//failRc:
+	//	freeRecoverControl(&rc);
 	//	return ret;
 	return 0
 }
-func scan_one_device(dev_scan *Device_scan) bool {
+func scanOneDevice(devScan *DeviceScan) bool {
 	var (
-		buf    *Extent_buffer
+		buf    *ExtentBuffer
 		bytenr uint64
 		ret    bool = false
-		//struct device_scan *dev_scan = (struct device_scan *)dev_scan_struct;
-		rc *Recover_control = dev_scan.Rc
-		//		device *Btrfs_device    = dev_scan.Dev
-		fd int = dev_scan.Fd
+		//struct deviceScan *devScan = (struct deviceScan *)devScanStruct;
+		rc *RecoverControl = devScan.Rc
+		//		device *BtrfsDevice    = devScan.Dev
+		fd int = devScan.Fd
 		//		oldtype int
-		h *Btrfs_header
+		h *BtrfsHeader
 	)
-	buf = new(Extent_buffer)
+	buf = new(ExtentBuffer)
 	buf.Len = uint64(rc.Leafsize)
 	buf.Data = make([]byte, rc.Leafsize)
 loop:
 	for bytenr = 0; ; bytenr += uint64(rc.Sectorsize) {
 		ret = false
-		if Is_super_block_address(bytenr) {
+		if IsSuperBlockAddress(bytenr) {
 			bytenr += uint64(rc.Sectorsize)
 		}
 		n, err := syscall.Pread(fd, buf.Data, int64(bytenr))
@@ -254,13 +245,13 @@ loop:
 		if n < int(rc.Leafsize) {
 			break loop
 		}
-		h = (*Btrfs_header)(unsafe.Pointer(&buf.Data))
-		if rc.Fs_devices.Fsid != h.Fsid || verify_tree_block_csum_silent(buf, uint16(rc.Csum_size)) {
+		h = (*BtrfsHeader)(unsafe.Pointer(&buf.Data))
+		if rc.FsDevices.Fsid != h.Fsid || verifyTreeBlockCsumSilent(buf, uint16(rc.CsumSize)) {
 			continue loop
 		}
-		rc.Rc_lock.Lock()
-		//		ret = process_extent_buffer(&rc.Eb_cache, buf, device, bytenr)
-		rc.Rc_lock.Unlock()
+		rc.RcLock.Lock()
+		//		ret = processExtentBuffer(&rc.EbCache, buf, device, bytenr)
+		rc.RcLock.Unlock()
 		if !ret {
 			break loop
 		}
@@ -271,14 +262,14 @@ loop:
 				if h.Generation > rc.Generation {
 					continue loop
 				}
-				if ret = extract_metadata_record(rc, buf); !ret {
+				if ret = extractMetadataRecord(rc, buf); !ret {
 					break loop
 				}
 			case BTRFS_CHUNK_TREE_OBJECTID:
-				if h.Generation > rc.Chunk_root_generation {
+				if h.Generation > rc.ChunkRootGeneration {
 					continue loop
 				}
-				if ret = extract_metadata_record(rc, buf); !ret {
+				if ret = extractMetadataRecord(rc, buf); !ret {
 					break loop
 				}
 			}
@@ -290,26 +281,26 @@ loop:
 	return ret
 }
 
-//func process_extent_buffer(eb_cache *Cache_tree,
-//	eb *Extent_buffer,
-//	device *Btrfs_device, offset uint64) bool {
-//	struct extent_record *rec;
-//	struct extent_record *exist;
-//	struct cache_extent *cache;
+//func processExtentBuffer(ebCache *CacheTree,
+//	eb *ExtentBuffer,
+//	device *BtrfsDevice, offset uint64) bool {
+//	struct extentRecord *rec;
+//	struct extentRecord *exist;
+//	struct cacheExtent *cache;
 //	int ret = 0;
 //
-//	rec = btrfs_new_extent_record(eb);
+//	rec = btrfsNewExtentRecord(eb);
 //	if (!rec->cache.size)
-//		goto free_out;
+//		goto freeOut;
 //again:
-//	cache = lookup_cache_extent(eb_cache,
+//	cache = lookupCacheExtent(ebCache,
 //				    rec->cache.start,
 //				    rec->cache.size);
 //	if (cache) {
-//		exist = container_of(cache, struct extent_record, cache);
+//		exist = containerOf(cache, struct extentRecord, cache);
 //
 //		if (exist->generation > rec->generation)
-//			goto free_out;
+//			goto freeOut;
 //		if (exist->generation == rec->generation) {
 //			if (exist->cache.start != rec->cache.start ||
 //			    exist->cache.size != rec->cache.size ||
@@ -321,9 +312,9 @@ loop:
 //				exist->offsets[exist->nmirrors] = offset;
 //				exist->nmirrors++;
 //			}
-//			goto free_out;
+//			goto freeOut;
 //		}
-//		remove_cache_extent(eb_cache, cache);
+//		removeCacheExtent(ebCache, cache);
 //		free(exist);
 //		goto again;
 //	}
@@ -331,43 +322,42 @@ loop:
 //	rec->devices[0] = device;
 //	rec->offsets[0] = offset;
 //	rec->nmirrors++;
-//	ret = insert_cache_extent(eb_cache, &rec->cache);
+//	ret = insertCacheExtent(ebCache, &rec->cache);
 //	BUG_ON(ret);
 //out:
 //	return ret;
-//free_out:
+//freeOut:
 //	free(rec);
 //	goto out;
 //	return false
 //}
-func extract_metadata_record(rc *Recover_control,
-	leaf *Extent_buffer) bool {
+func extractMetadataRecord(rc *RecoverControl, leaf *ExtentBuffer) bool {
 	var (
-		//	struct btrfs_key key;
+		//	struct btrfsKey key;
 		ret = false
 	//	int i;
 	//	u32 nritems;
 	//
 	)
-	nritems := uint64((*Btrfs_header)(unsafe.Pointer(&leaf.Data)).Nritems)
+	nritems := uint64((*BtrfsHeader)(unsafe.Pointer(&leaf.Data)).Nritems)
 	for i := uint64(0); i < nritems; i++ {
-		//		btrfs_item_key_to_cpu(leaf, &key, i);
+		//		btrfsItemKeyToCpu(leaf, &key, i);
 		//		switch (key.type) {
 		//		case BTRFS_BLOCK_GROUP_ITEM_KEY:
-		//			pthread_mutex_lock(&rc->rc_lock);
-		//			ret = process_block_group_item(&rc->bg, leaf, &key, i);
-		//			pthread_mutex_unlock(&rc->rc_lock);
+		//			pthreadMutexLock(&rc->rcLock);
+		//			ret = processBlockGroupItem(&rc->bg, leaf, &key, i);
+		//			pthreadMutexUnlock(&rc->rcLock);
 		//			break;
 		//		case BTRFS_CHUNK_ITEM_KEY:
-		//			pthread_mutex_lock(&rc->rc_lock);
-		//			ret = process_chunk_item(&rc->chunk, leaf, &key, i);
-		//			pthread_mutex_unlock(&rc->rc_lock);
+		//			pthreadMutexLock(&rc->rcLock);
+		//			ret = processChunkItem(&rc->chunk, leaf, &key, i);
+		//			pthreadMutexUnlock(&rc->rcLock);
 		//			break;
 		//		case BTRFS_DEV_EXTENT_KEY:
-		//			pthread_mutex_lock(&rc->rc_lock);
-		//			ret = process_device_extent_item(&rc->devext, leaf,
+		//			pthreadMutexLock(&rc->rcLock);
+		//			ret = processDeviceExtentItem(&rc->devext, leaf,
 		//							 &key, i);
-		//			pthread_mutex_unlock(&rc->rc_lock);
+		//			pthreadMutexUnlock(&rc->rcLock);
 		//			break;
 		//		}
 		//		if (ret)

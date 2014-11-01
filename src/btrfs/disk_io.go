@@ -10,31 +10,30 @@ import (
 )
 
 var (
-	Crc32c  = crc32.MakeTable(crc32.Castagnoli)
-	
+	Crc32c = crc32.MakeTable(crc32.Castagnoli)
 )
 
-func btrfs_scan_fs_devices(
+func btrfsScanFsDevices(
 	fd int,
 	path string,
-	fs_devices **Btrfs_fs_devices,
-	sb_bytenr uint64,
-	run_ioctl bool,
-	super_recover bool) int {
-	//	u64 total_devs;
+	fsDevices **BtrfsFsDevices,
+	sbBytenr uint64,
+	runIoctl bool,
+	superRecover bool) int {
+	//	u64 totalDevs;
 	//	int ret;
-	//	if (!sb_bytenr)
-	//		sb_bytenr = BTRFS_SUPER_INFO_OFFSET;
+	//	if (!sbBytenr)
+	//		sbBytenr = BTRFS_SUPER_INFO_OFFSET;
 	//
-	//	ret = btrfs_scan_one_device(fd, path, fs_devices,
-	//				    &total_devs, sb_bytenr, super_recover);
+	//	ret = btrfsScanOneDevice(fd, path, fsDevices,
+	//				    &totalDevs, sbBytenr, superRecover);
 	//	if (ret) {
 	//		fprintf(stderr, "No valid Btrfs found on %s\n", path);
 	//		return ret;
 	//	}
 	//
-	//	if (total_devs != 1) {
-	//		ret = btrfs_scan_for_fsid(run_ioctl);
+	//	if (totalDevs != 1) {
+	//		ret = btrfsScanForFsid(runIoctl);
 	//		if (ret)
 	//			return ret;
 	//	}
@@ -42,7 +41,7 @@ func btrfs_scan_fs_devices(
 }
 
 // calculate byte offset of superblock mirror in partition
-func Btrfs_sb_offset(
+func BtrfsSbOffset(
 	mirror int) uint64 {
 
 	var start uint64 = 16 * 1024
@@ -52,40 +51,40 @@ func Btrfs_sb_offset(
 	return BTRFS_SUPER_INFO_OFFSET
 }
 
-// reads super block into sb at offset sb_bytenr
-// if super_recover is != 0 the read superblock backups ad find latest generation
-func btrfs_read_dev_super(
+// reads super block into sb at offset sbBytenr
+// if superRecover is != 0 the read superblock backups ad find latest generation
+func btrfsReadDevSuper(
 	fd int,
-	sb *Btrfs_super_block,
-	sb_bytenr uint64,
-	super_recover bool) bool {
+	sb *BtrfsSuperBlock,
+	sbBytenr uint64,
+	superRecover bool) bool {
 
 	var (
-		fsid                [BTRFS_FSID_SIZE]uint8
-		fsid_is_initialized bool = false
-		buf                 *Btrfs_super_block
+		fsid              [BTRFS_FSID_SIZE]uint8
+		fsidIsInitialized bool = false
+		buf               *BtrfsSuperBlock
 		//		i                   int
 		//		ret                 int
-		max_super int    = 1
-		transid   uint64 = 0
-		bytenr    int64
+		maxSuper int    = 1
+		transid  uint64 = 0
+		bytenr   int64
 		//		err                 error
 	)
-	buf = new(Btrfs_super_block)
-	if super_recover {
-		max_super = BTRFS_SUPER_MIRROR_MAX
+	buf = new(BtrfsSuperBlock)
+	if superRecover {
+		maxSuper = BTRFS_SUPER_MIRROR_MAX
 	}
 	var size = binary.Size(buf)
 	var bytebuf = make([]byte, size)
 	var bytebr = bytes.NewReader(bytebuf)
 	// dont look like this will be executed
-	if sb_bytenr != BTRFS_SUPER_INFO_OFFSET {
-		ret, _ := syscall.Pread(fd, bytebuf, int64(sb_bytenr))
+	if sbBytenr != BTRFS_SUPER_INFO_OFFSET {
+		ret, _ := syscall.Pread(fd, bytebuf, int64(sbBytenr))
 		if ret < size {
 			return false
 		}
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
-		if buf.Bytenr != uint64(sb_bytenr) ||
+		if buf.Bytenr != uint64(sbBytenr) ||
 			buf.Magic != BTRFS_MAGIC {
 			return false
 		}
@@ -100,10 +99,10 @@ func btrfs_read_dev_super(
 	* later supers, using BTRFS_SUPER_MIRROR_MAX instead
 	 */
 
-	for i := 0; i < max_super; i++ {
+	for i := 0; i < maxSuper; i++ {
 		fmt.Printf("i: %v\n", i)
 
-		bytenr = int64(Btrfs_sb_offset(i))
+		bytenr = int64(BtrfsSbOffset(i))
 		fmt.Printf("bytenr: %v\n", bytenr)
 		ret, _ := syscall.Pread(fd, bytebuf, bytenr)
 		//fmt.Printf("err: %v, ret: %v. bytebuf: %v\n", err, ret, bytebuf)
@@ -127,10 +126,10 @@ func btrfs_read_dev_super(
 			continue
 		}
 
-		if !fsid_is_initialized {
+		if !fsidIsInitialized {
 
 			fsid = buf.Fsid
-			fsid_is_initialized = true
+			fsidIsInitialized = true
 		} else if fsid != buf.Fsid {
 			/*
 			 * the superblocks (the original one and
@@ -140,8 +139,8 @@ func btrfs_read_dev_super(
 			fmt.Printf("bad fsid %x not %x\n", fsid, buf.Fsid)
 			continue
 		}
-		if !check_super(fd,uint64(bytenr), buf) {
-//			continue
+		if !checkSuper(fd, uint64(bytenr), buf) {
+			//			continue
 		}
 
 		if buf.Generation > transid {
@@ -158,7 +157,7 @@ func btrfs_read_dev_super(
 
 }
 
-func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
+func csumTreeBlockSize(buf *ExtentBuffer, csumSize uint16,
 	verify bool, silent bool) bool {
 	var (
 		crc  uint32 = ^uint32(0)
@@ -190,11 +189,11 @@ func csum_tree_block_size(buf *Extent_buffer, csum_size uint16,
 	return true
 }
 
-func verify_tree_block_csum_silent(buf *Extent_buffer, csum_size uint16) bool {
-	return csum_tree_block_size(buf, csum_size, true, true)
+func verifyTreeBlockCsumSilent(buf *ExtentBuffer, csumSize uint16) bool {
+	return csumTreeBlockSize(buf, csumSize, true, true)
 }
 
-func check_super(fd int ,bytenr uint64, sb *Btrfs_super_block) bool {
+func checkSuper(fd int, bytenr uint64, sb *BtrfsSuperBlock) bool {
 
 	switch {
 	case sb.Bytenr != bytenr:
@@ -205,8 +204,8 @@ func check_super(fd int ,bytenr uint64, sb *Btrfs_super_block) bool {
 		return false
 	}
 	var (
-		crc  uint32 = ^uint32(0)
-//		crc  uint32 = uint32(0)
+		crc uint32 = ^uint32(0)
+		//		crc  uint32 = uint32(0)
 		csum uint32
 	)
 	fmt.Printf("Reading crc32c\n")
@@ -220,20 +219,20 @@ func check_super(fd int ,bytenr uint64, sb *Btrfs_super_block) bool {
 	if err != nil {
 		fmt.Println("binary.Write failed:", err)
 	}
-	mybytes := make([]byte,4096)
+	mybytes := make([]byte, 4096)
 	ret, _ := syscall.Pread(fd, mybytes, int64(bytenr))
 	if ret != 4096 {
 		fmt.Printf("Pread failed\n")
-		
+
 	}
 
-	crc = crc32.Checksum( mybytes[BTRFS_CSUM_SIZE:],Crc32c)
-	
+	crc = crc32.Checksum(mybytes[BTRFS_CSUM_SIZE:], Crc32c)
+
 	if csum != crc {
-		fmt.Printf("Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum,len(mybytes),mybytes)
+		fmt.Printf("Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum, len(mybytes), mybytes)
 		return true
 	}
 	fmt.Printf("Crc match calculated %08x have %08x\n", crc, csum)
 	return true
-	
+
 }

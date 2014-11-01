@@ -1,355 +1,365 @@
 // Created by cgo -godefs - DO NOT EDIT
-// cgo -godefs=true -debug-define=true btrfs_h.go
-
+// cgo -godefs=true -debug-define=true btrfsH.go
 package btrfs
 
 import (
+	"container/list"
 	"github.com/petar/GoLLRB/llrb"
 )
+
 type Mutex struct {
 	Lock uint64
 }
-type Rb_node struct {
-	Next *Rb_node
+type RbNode struct {
+	Next *RbNode
 }
-type Rb_root struct {
-	Next *Rb_node
+type RbRoot struct {
+	Next *RbNode
 }
-
-type Cache_extent struct {
-	Node     Rb_node
+type CacheExtent struct {
 	Objectid uint64
 	Start    uint64
 	Size     uint64
 }
 
-type List_head struct {
-	Next *List_head
-	Prev *List_head
-}
-type Extent_io_tree struct {
+//type *list.List struct {
+//	Next **list.List
+//	Prev **list.List
+//}
+type ExtentIoTree struct {
 	State *llrb.LLRB
 	Cache *llrb.LLRB
-	Lru   List_head
+	Lru   *list.List
 	Size  uint64
 }
-type Block_group_record struct {
-	Cache      Cache_extent
-	List       List_head
+type BlockGroupRecord struct {
+	CacheExtent
+	List       *list.Element
 	Generation uint64
 	Objectid   uint64
 	Type       uint8
+	Offset     uint64
+	Flags      uint64
+}
 
-	Offset uint64
-	Flags  uint64
+func (x *BlockGroupRecord) Less(y llrb.Item) bool {
+	return (x.Start + x.Size) <= y.(*BlockGroupRecord).Start
 }
-type Block_group_tree struct {
-	Tree   *llrb.LLRB
-	Block_Groups List_head
+
+type BlockGroupTree struct {
+	Tree         *llrb.LLRB
+	Block_Groups *list.List
 }
-type Device_record struct {
-	Node       Rb_node
+type DeviceRecord struct {
+	Node       RbNode
 	Devid      uint64
 	Generation uint64
 	Objectid   uint64
 	Type       uint8
-
 	Offset     uint64
-	Total_byte uint64
-	Byte_used  uint64
-	Real_used  uint64
+	TotalByte  uint64
+	ByteUsed   uint64
+	RealUsed   uint64
 }
 type Stripe struct {
 	Devid  uint64
 	Offset uint64
 	Uuid   [16]uint8
 }
-type Chunk_record struct {
-	Cache      Cache_extent
-	List       List_head
-	Dextents   List_head
-	Bg_rec     *Block_group_record
+type ChunkRecord struct {
+	Cache      CacheExtent
+	List       *list.List
+	Dextents   *list.List
+	BgRec      *BlockGroupRecord
 	Generation uint64
 	Objectid   uint64
 	Type       uint8
+	Offset     uint64
+	Owner      uint64
+	Length     uint64
+	TypeFlags  uint64
+	StripeLen  uint64
+	NumStripes uint16
+	SubStripes uint16
+	IoAlign    uint64
+	IoWidth    uint64
+	SectorSize uint64
+	Stripes    [0]Stripe
+}
+type DeviceExtentRecord struct {
+	CacheExtent
+	ChunkList     *list.Element
+	DeviceList    *list.Element
+	Generation    uint64
+	Objectid      uint64
+	Type          uint8
+	Offset        uint64
+	ChunkObjectid uint64
+	ChunkOffset   uint64
+	Length        uint64
+}
 
-	Offset      uint64
-	Owner       uint64
-	Length      uint64
-	Type_flags  uint64
-	Stripe_len  uint64
-	Num_stripes uint16
-	Sub_stripes uint16
+// Less compares device extents first by Objectid (device) the start range in thelook left red blakc tree
+func (x *DeviceExtentRecord) Less(y llrb.Item) bool {
+	cmp := y.(*DeviceExtentRecord)
+	switch {
+	case x.CacheExtent.Objectid < cmp.CacheExtent.Objectid:
+		return true
+	case x.CacheExtent.Objectid > cmp.CacheExtent.Objectid:
+		return false
+	}
+	return (x.CacheExtent.Start + x.CacheExtent.Size) <= cmp.CacheExtent.Start
+}
 
-	Io_align    uint64
-	Io_width    uint64
-	Sector_size uint64
-	Stripes     [0]Stripe
+type DeviceExtentTree struct {
+	Tree          *llrb.LLRB
+	ChunkOrphans  *list.List
+	DeviceOrphans *list.List
 }
-type Device_extent_record struct {
-	Cache       Cache_extent
-	Chunk_list  List_head
-	Device_list List_head
-	Generation  uint64
-	Objectid    uint64
-	Type        uint8
-
-	Offset          uint64
-	Chunk_objectid uint64
-	Chunk_offset    uint64
-	Length          uint64
+type RootInfo struct {
+	RbNode     RbNode
+	SortNode   RbNode
+	RootId     uint64
+	RootOffset uint64
+	Flags      uint64
+	RefTree    uint64
+	DirId      uint64
+	TopId      uint64
+	Gen        uint64
+	Ogen       uint64
+	Otime      uint64
+	Uuid       [16]uint8
+	Puuid      [16]uint8
+	Ruuid      [16]uint8
+	Path       *int8
+	Name       *int8
+	FullPath   *int8
+	Deleted    int32
 }
-type Device_extent_tree struct {
-	Tree           *llrb.LLRB
-	Chunk_orphans  List_head
-	Device_orphans List_head
-}
-type Root_info struct {
-	Rb_node     Rb_node
-	Sort_node   Rb_node
-	Root_id     uint64
-	Root_offset uint64
-	Flags       uint64
-	Ref_tree    uint64
-	Dir_id      uint64
-	Top_id      uint64
-	Gen         uint64
-	Ogen        uint64
-	Otime       uint64
-	Uuid        [16]uint8
-	Puuid       [16]uint8
-	Ruuid       [16]uint8
-	Path        *int8
-	Name        *int8
-	Full_path   *int8
-	Deleted     int32
-}
-type Cmd_struct struct {
+type CmdStruct struct {
 	Token    *int8
 	Fn       *[0]byte
 	Usagestr **int8
-	Next     *Cmd_group
+	Next     *CmdGroup
 	Hidden   int32
 }
-type Cmd_group struct {
+type CmdGroup struct {
 	Usagestr **int8
 	Infostr  *int8
 	Commands [0]byte
 }
-type Btrfs_disk_key struct {
+type BtrfsDiskKey struct {
 	Objectid uint64
 	Type     uint8
 	Offset   uint64
 }
-type Btrfs_key struct {
+type BtrfsKey struct {
 	Objectid uint64
 	Type     uint8
 	Offset   uint64
 }
-type Btrfs_mapping_tree struct {
+type BtrfsMappingTree struct {
 	Tree *llrb.LLRB
 }
-type Btrfs_dev_item struct {
-	Devid        uint64
-	Total_bytes  uint64
-	Bytes_used   uint64
-	Io_align     uint32
-	Io_width     uint32
-	Sector_size  uint32
-	Type         uint64
-	Generation   uint64
-	Start_offset uint64
-	Dev_group    uint32
-	Seek_speed   uint8
-	Bandwidth    uint8
-	Uuid         [16]uint8
-	Fsid         [16]uint8
+type BtrfsDevItem struct {
+	Devid       uint64
+	TotalBytes  uint64
+	BytesUsed   uint64
+	IoAlign     uint32
+	IoWidth     uint32
+	SectorSize  uint32
+	Type        uint64
+	Generation  uint64
+	StartOffset uint64
+	DevGroup    uint32
+	SeekSpeed   uint8
+	Bandwidth   uint8
+	Uuid        [16]uint8
+	Fsid        [16]uint8
 }
-type Btrfs_stripe struct {
+type BtrfsStripe struct {
 	Devid  uint64
 	Offset uint64
 	Uuid   [16]uint8
 }
-type Btrfs_chunk struct {
-	Length      uint64
-	Owner       uint64
-	Stripe_len  uint64
-	Type        uint64
-	Io_align    uint64
-	Io_width    uint64
-	Sector_size uint64
-	Num_stripes uint16
-	Sub_stripes uint16
-
-	Stripe Btrfs_stripe
+type BtrfsChunk struct {
+	Length     uint64
+	Owner      uint64
+	StripeLen  uint64
+	Type       uint64
+	IoAlign    uint64
+	IoWidth    uint64
+	SectorSize uint64
+	NumStripes uint16
+	SubStripes uint16
+	Stripe     BtrfsStripe
 }
-type Btrfs_free_space_entry struct {
+type BtrfsFreeSpaceEntry struct {
 	Offset uint64
 	Bytes  uint64
 	Type   uint8
 }
-type Btrfs_free_space_header struct {
-	Location   Btrfs_disk_key
+type BtrfsFreeSpaceHeader struct {
+	Location   BtrfsDiskKey
 	Generation uint64
 	Entries    uint64
 	Bitmaps    uint64
 }
-type Btrfs_header struct {
+type BtrfsHeader struct {
 	Csum       [32]uint8
 	Fsid       [16]uint8
 	Bytenr     uint64
 	Flags      uint64
-	Tree_uuid  [16]uint8
+	TreeUuid   [16]uint8
 	Generation uint64
 	Owner      uint64
 	Nritems    uint32
 	Level      uint8
 }
-type Btrfs_root_backup struct {
-	Tree_root         uint64
-	Tree_root_gen     uint64
-	Chunk_root        uint64
-	Chunk_root_gen    uint64
-	Extent_root       uint64
-	Extent_root_gen   uint64
-	Fs_root           uint64
-	Fs_root_gen       uint64
-	Dev_root          uint64
-	Dev_root_gen      uint64
-	Csum_root         uint64
-	Csum_root_gen     uint64
-	Total_bytes       uint64
-	Bytes_used        uint64
-	Num_devices       uint64
-	Unsed_64          [4]uint64
-	Tree_root_level   uint8
-	Chunk_root_level  uint8
-	Extent_root_level uint8
-	Fs_root_level     uint8
-	Dev_root_level    uint8
-	Csum_root_level   uint8
-	Unused_8          [10]uint8
+type BtrfsRootBackup struct {
+	TreeRoot        uint64
+	TreeRootGen     uint64
+	ChunkRoot       uint64
+	ChunkRootGen    uint64
+	ExtentRoot      uint64
+	ExtentRootGen   uint64
+	FsRoot          uint64
+	FsRootGen       uint64
+	DevRoot         uint64
+	DevRootGen      uint64
+	CsumRoot        uint64
+	CsumRootGen     uint64
+	TotalBytes      uint64
+	BytesUsed       uint64
+	NumDevices      uint64
+	Unsed_64        [4]uint64
+	TreeRootLevel   uint8
+	ChunkRootLevel  uint8
+	ExtentRootLevel uint8
+	FsRootLevel     uint8
+	DevRootLevel    uint8
+	CsumRootLevel   uint8
+	Unused_8        [10]uint8
 }
-type Btrfs_super_block struct {
-	Csum                  [32]uint8
-	Fsid                  [16]uint8
-	Bytenr                uint64
-	Flags                 uint64
-	Magic                 uint64
-	Generation            uint64
-	Root                  uint64
-	Chunk_root            uint64
-	Log_root              uint64
-	Log_root_transid      uint64
-	Total_bytes           uint64
-	Bytes_used            uint64
-	Root_dir_objectid     uint64
-	Num_devices           uint64
-	Sectorsize            uint32
-	Nodesize              uint32
-	Leafsize              uint32
-	Stripesize            uint32
-	Sys_chunk_array_size  uint32
-	Chunk_root_generation uint64
-	Compat_flags          uint64
-	Compat_ro_flags       uint64
-	Incompat_flags        uint64
-	Csum_type             uint16
-	Root_level            uint8
-	Chunk_root_level      uint8
-	Log_root_level        uint8
-	Dev_item              Btrfs_dev_item
-	Label                 [256]int8
-	Cache_generation      uint64
-	Uuid_tree_generation  uint64
-	Reserved              [30]uint64
-	Sys_chunk_array       [2048]uint8
-	Super_roots           [4]Btrfs_root_backup
+type BtrfsSuperBlock struct {
+	Csum                [32]uint8
+	Fsid                [16]uint8
+	Bytenr              uint64
+	Flags               uint64
+	Magic               uint64
+	Generation          uint64
+	Root                uint64
+	ChunkRoot           uint64
+	LogRoot             uint64
+	LogRootTransid      uint64
+	TotalBytes          uint64
+	BytesUsed           uint64
+	RootDirObjectid     uint64
+	NumDevices          uint64
+	Sectorsize          uint32
+	Nodesize            uint32
+	Leafsize            uint32
+	Stripesize          uint32
+	SysChunkArraySize   uint32
+	ChunkRootGeneration uint64
+	CompatFlags         uint64
+	CompatRoFlags       uint64
+	IncompatFlags       uint64
+	CsumType            uint16
+	RootLevel           uint8
+	ChunkRootLevel      uint8
+	LogRootLevel        uint8
+	DevItem             BtrfsDevItem
+	Label               [256]int8
+	CacheGeneration     uint64
+	UuidTreeGeneration  uint64
+	Reserved            [30]uint64
+	SysChunkArray       [2048]uint8
+	SuperRoots          [4]BtrfsRootBackup
 }
-type Btrfs_item struct {
-	Key    Btrfs_disk_key
+type BtrfsItem struct {
+	Key    BtrfsDiskKey
 	Offset uint32
 	Size   uint32
 }
-type Btrfs_leaf struct {
-	Header Btrfs_header
-	Items  []Btrfs_item
+type BtrfsLeaf struct {
+	Header BtrfsHeader
+	Items  []BtrfsItem
 }
-type Btrfs_key_ptr struct {
-	Key        Btrfs_disk_key
+type BtrfsKeyPtr struct {
+	Key        BtrfsDiskKey
 	Blockptr   uint64
 	Generation uint64
 }
-type Btrfs_node struct {
-	Header Btrfs_header
-	Ptrs   []Btrfs_key_ptr
+type BtrfsNode struct {
+	Header BtrfsHeader
+	Ptrs   []BtrfsKeyPtr
 }
-type Btrfs_path struct {
-	Nodes [8]*Extent_buffer
+type BtrfsPath struct {
+	Nodes [8]*ExtentBuffer
 	Slots [8]int32
 	Locks [8]int32
 	Reada int32
 	Level int32
 }
-type Btrfs_extent_item struct {
+type BtrfsExtentItem struct {
 	Refs       uint64
 	Generation uint64
 	Flags      uint64
 }
-type Btrfs_extent_item_v0 struct {
+type BtrfsExtentItemV0 struct {
 	Refs uint64
 }
-type Btrfs_tree_block_info struct {
-	Key   Btrfs_disk_key
+type BtrfsTreeBlockInfo struct {
+	Key   BtrfsDiskKey
 	Level uint8
 }
-type Btrfs_extent_data_ref struct {
+type BtrfsExtentDataRef struct {
 	Root     uint64
 	Objectid uint64
 	Offset   uint64
 	Count    uint64
 }
-type Btrfs_shared_data_ref struct {
+type BtrfsSharedDataRef struct {
 	Count uint64
 }
-type Btrfs_extent_inline_ref struct {
-	Type uint8
-
+type BtrfsExtentInlineRef struct {
+	Type   uint8
 	Offset uint64
 }
-type Btrfs_extent_ref_v0 struct {
+type BtrfsExtentRefV0 struct {
 	Root       uint64
 	Generation uint64
 	Objectid   uint64
 	Count      uint64
 }
+
 /* dev extents record free space on individual devices.  The owner
  * field points back to the chunk allocation mapping tree that allocated
  * the extent.  The chunk tree uuid field is a way to double check the owner
  */
-
-type Btrfs_dev_extent struct {
-	Chunk_Tree      uint64
-	Chunk_Objectid  uint64
-	Chunk_Offset    uint64
-	Length    uint64
-	Chunk_Tree_uuid [16]uint8
+type BtrfsDevExtent struct {
+	Chunk_Tree     uint64
+	Chunk_Objectid uint64
+	Chunk_Offset   uint64
+	Length         uint64
+	Chunk_TreeUuid [16]uint8
 }
-type Btrfs_inode_ref struct {
+type BtrfsInodeRef struct {
 	Index uint64
 	Len   uint16
 }
-type Btrfs_inode_extref struct {
-	Parent_objectid uint64
-	Index           uint64
-	Name_len        uint16
-	Name            [0]byte
+type BtrfsInodeExtref struct {
+	ParentObjectid uint64
+	Index          uint64
+	NameLen        uint16
+	Name           [0]byte
 }
-type Btrfs_timespec struct {
+type BtrfsTimespec struct {
 	Sec  uint64
 	Nsec uint64
 }
-type Btrfs_inode_item struct {
+type BtrfsInodeItem struct {
 	Generation uint64
 	Transid    uint64
 	Size       uint64
@@ -363,322 +373,317 @@ type Btrfs_inode_item struct {
 	Flags      uint64
 	Sequence   uint64
 	Reserved   [4]uint64
-	Atime      Btrfs_timespec
-	Ctime      Btrfs_timespec
-	Mtime      Btrfs_timespec
-	Otime      Btrfs_timespec
+	Atime      BtrfsTimespec
+	Ctime      BtrfsTimespec
+	Mtime      BtrfsTimespec
+	Otime      BtrfsTimespec
 }
-type Btrfs_dir_log_item struct {
+type BtrfsDirLogItem struct {
 	End uint64
 }
-type Btrfs_dir_item struct {
-	Location Btrfs_disk_key
+type BtrfsDirItem struct {
+	Location BtrfsDiskKey
 	Transid  uint64
-	Data_len uint16
-	Name_len uint16
+	DataLen  uint16
+	NameLen  uint16
 	Type     uint8
 }
-type Btrfs_root_item_v0 struct {
-	Inode         Btrfs_inode_item
-	Generation    uint64
-	Root_dirid    uint64
-	Bytenr        uint64
-	Byte_limit    uint64
-	Bytes_used    uint64
-	Last_snapshot uint64
-	Flags         uint64
-	Refs          uint64
-	Drop_progress Btrfs_disk_key
-	Drop_level    uint8
-	Level         uint8
+type BtrfsRootItemV0 struct {
+	Inode        BtrfsInodeItem
+	Generation   uint64
+	RootDirid    uint64
+	Bytenr       uint64
+	ByteLimit    uint64
+	BytesUsed    uint64
+	LastSnapshot uint64
+	Flags        uint64
+	Refs         uint64
+	DropProgress BtrfsDiskKey
+	DropLevel    uint8
+	Level        uint8
 }
-type Btrfs_root_item struct {
-	Inode         Btrfs_inode_item
-	Generation    uint64
-	Root_dirid    uint64
-	Bytenr        uint64
-	Byte_limit    uint64
-	Bytes_used    uint64
-	Last_snapshot uint64
-	Flags         uint64
-	Refs          uint64
-	Drop_progress Btrfs_disk_key
-	Drop_level    uint8
-	Level         uint8
-
-	Generation_v2 uint64
-	Uuid          [16]uint8
-	Parent_uuid   [16]uint8
-	Received_uuid [16]uint8
-	Ctransid      uint64
-	Otransid      uint64
-	Stransid      uint64
-	Rtransid      uint64
-	Ctime         Btrfs_timespec
-	Otime         Btrfs_timespec
-	Stime         Btrfs_timespec
-	Rtime         Btrfs_timespec
-	Reserved      [8]uint64
+type BtrfsRootItem struct {
+	Inode        BtrfsInodeItem
+	Generation   uint64
+	RootDirid    uint64
+	Bytenr       uint64
+	ByteLimit    uint64
+	BytesUsed    uint64
+	LastSnapshot uint64
+	Flags        uint64
+	Refs         uint64
+	DropProgress BtrfsDiskKey
+	DropLevel    uint8
+	Level        uint8
+	GenerationV2 uint64
+	Uuid         [16]uint8
+	ParentUuid   [16]uint8
+	ReceivedUuid [16]uint8
+	Ctransid     uint64
+	Otransid     uint64
+	Stransid     uint64
+	Rtransid     uint64
+	Ctime        BtrfsTimespec
+	Otime        BtrfsTimespec
+	Stime        BtrfsTimespec
+	Rtime        BtrfsTimespec
+	Reserved     [8]uint64
 }
-type Btrfs_root_ref struct {
+type BtrfsRootRef struct {
 	Dirid    uint64
 	Sequence uint64
 	Len      uint16
 }
-type Btrfs_file_extent_item struct {
-	Generation     uint64
-	Ram_bytes      uint64
-	Compression    uint8
-	Encryption     uint8
-	Other_encoding uint16
-	Type           uint8
-
-	Disk_bytenr    uint64
-	Disk_num_bytes uint64
-	Offset         uint64
-	Num_bytes      uint64
+type BtrfsFileExtentItem struct {
+	Generation    uint64
+	RamBytes      uint64
+	Compression   uint8
+	Encryption    uint8
+	OtherEncoding uint16
+	Type          uint8
+	DiskBytenr    uint64
+	DiskNumBytes  uint64
+	Offset        uint64
+	NumBytes      uint64
 }
-type Btrfs_csum_item struct {
+type BtrfsCsumItem struct {
 	Csum uint8
 }
-type Btrfs_qgroup_status_item struct {
+type BtrfsQgroupStatusItem struct {
 	Version    uint64
 	Generation uint64
 	Flags      uint64
 	Scan       uint64
 }
-type Btrfs_block_group_item struct {
+type BtrfsBlockGroupItem struct {
 	Used     uint64
 	Objectid uint64
 	Flags    uint64
 }
-type Btrfs_qgroup_info_item struct {
-	Generation            uint64
-	Referenced            uint64
-	Referenced_compressed uint64
-	Exclusive             uint64
-	Exclusive_compressed  uint64
+type BtrfsQgroupInfoItem struct {
+	Generation           uint64
+	Referenced           uint64
+	ReferencedCompressed uint64
+	Exclusive            uint64
+	ExclusiveCompressed  uint64
 }
-type Btrfs_qgroup_limit_item struct {
-	Flags          uint64
-	Max_referenced uint64
-	Max_exclusive  uint64
-	Rsv_referenced uint64
-	Rsv_exclusive  uint64
+type BtrfsQgroupLimitItem struct {
+	Flags         uint64
+	MaxReferenced uint64
+	MaxExclusive  uint64
+	RsvReferenced uint64
+	RsvExclusive  uint64
 }
-type Btrfs_space_info struct {
+type BtrfsSpaceInfo struct {
+	Flags       uint64
+	TotalBytes  uint64
+	BytesUsed   uint64
+	BytesPinned uint64
+	Full        int32
+	List        *list.List
+}
+type BtrfsBlockGroupCache struct {
+	Cache        CacheExtent
+	Key          BtrfsKey
+	Item         BtrfsBlockGroupItem
+	SpaceInfo    *BtrfsSpaceInfo
+	FreeSpaceCtl *BtrfsFreeSpaceCtl
+	Pinned       uint64
 	Flags        uint64
-	Total_bytes  uint64
-	Bytes_used   uint64
-	Bytes_pinned uint64
-	Full         int32
-
-	List List_head
+	Cached       int32
+	Ro           int32
 }
-type Btrfs_block_group_cache struct {
-	Cache          Cache_extent
-	Key            Btrfs_key
-	Item           Btrfs_block_group_item
-	Space_info     *Btrfs_space_info
-	Free_space_ctl *Btrfs_free_space_ctl
-	Pinned         uint64
-	Flags          uint64
-	Cached         int32
-	Ro             int32
+type BtrfsFsInfo struct {
+	Fsid                   [16]uint8
+	ChunkTreeUuid          [16]uint8
+	FsRoot                 *BtrfsRoot
+	ExtentRoot             *BtrfsRoot
+	TreeRoot               *BtrfsRoot
+	ChunkRoot              *BtrfsRoot
+	DevRoot                *BtrfsRoot
+	CsumRoot               *BtrfsRoot
+	QuotaRoot              *BtrfsRoot
+	FsRootTree             RbRoot
+	LogRootTree            *BtrfsRoot
+	ExtentCache            ExtentIoTree
+	FreeSpaceCache         ExtentIoTree
+	BlockGroupCache        ExtentIoTree
+	PinnedExtents          ExtentIoTree
+	PendingDel             ExtentIoTree
+	ExtentIns              ExtentIoTree
+	MappingTree            BtrfsMappingTree
+	Generation             uint64
+	LastTransCommitted     uint64
+	AvailDataAllocBits     uint64
+	AvailMetadataAllocBits uint64
+	AvailSystemAllocBits   uint64
+	DataAllocProfile       uint64
+	MetadataAllocProfile   uint64
+	SystemAllocProfile     uint64
+	AllocStart             uint64
+	RunningTransaction     *BtrfsTransHandle
+	SuperCopy              *BtrfsSuperBlock
+	FsMutex                Mutex
+	SuperBytenr            uint64
+	TotalPinned            uint64
+	ExtentOps              *BtrfsExtentOps
+	DirtyCowonlyRoots      *list.List
+	RecowEbs               *list.List
+	FsDevices              *BtrfsFsDevices
+	SpaceInfo              *list.List
+	SystemAllocs           int32
+	FreeExtentHook         *[0]byte
+	FsckExtentCache        **llrb.LLRB
+	CorruptBlocks          **llrb.LLRB
 }
-type Btrfs_fs_info struct {
-	Fsid                      [16]uint8
-	Chunk_tree_uuid           [16]uint8
-	Fs_root                   *Btrfs_root
-	Extent_root               *Btrfs_root
-	Tree_root                 *Btrfs_root
-	Chunk_root                *Btrfs_root
-	Dev_root                  *Btrfs_root
-	Csum_root                 *Btrfs_root
-	Quota_root                *Btrfs_root
-	Fs_root_tree              Rb_root
-	Log_root_tree             *Btrfs_root
-	Extent_cache              Extent_io_tree
-	Free_space_cache          Extent_io_tree
-	Block_group_cache         Extent_io_tree
-	Pinned_extents            Extent_io_tree
-	Pending_del               Extent_io_tree
-	Extent_ins                Extent_io_tree
-	Mapping_tree              Btrfs_mapping_tree
-	Generation                uint64
-	Last_trans_committed      uint64
-	Avail_data_alloc_bits     uint64
-	Avail_metadata_alloc_bits uint64
-	Avail_system_alloc_bits   uint64
-	Data_alloc_profile        uint64
-	Metadata_alloc_profile    uint64
-	System_alloc_profile      uint64
-	Alloc_start               uint64
-	Running_transaction       *Btrfs_trans_handle
-	Super_copy                *Btrfs_super_block
-	Fs_mutex                  Mutex
-	Super_bytenr              uint64
-	Total_pinned              uint64
-	Extent_ops                *Btrfs_extent_ops
-	Dirty_cowonly_roots       List_head
-	Recow_ebs                 List_head
-	Fs_devices                *Btrfs_fs_devices
-	Space_info                List_head
-	System_allocs             int32
-
-	Free_extent_hook  *[0]byte
-	Fsck_extent_cache **llrb.LLRB
-	Corrupt_blocks    **llrb.LLRB
+type BtrfsRoot struct {
+	Node           *ExtentBuffer
+	CommitRoot     *ExtentBuffer
+	RootItem       BtrfsRootItem
+	RootKey        BtrfsKey
+	FsInfo         *BtrfsFsInfo
+	Objectid       uint64
+	LastTrans      uint64
+	Sectorsize     uint64
+	Nodesize       uint64
+	Leafsize       uint64
+	Stripesize     uint64
+	RefCows        int32
+	TrackDirty     int32
+	Type           uint64
+	HighestInode   uint64
+	LastInodeAlloc uint64
+	DirtyList      *list.List
+	RbNode         RbNode
 }
-type Btrfs_root struct {
-	Node             *Extent_buffer
-	Commit_root      *Extent_buffer
-	Root_item        Btrfs_root_item
-	Root_key         Btrfs_key
-	Fs_info          *Btrfs_fs_info
-	Objectid         uint64
-	Last_trans       uint64
-	Sectorsize       uint64
-	Nodesize         uint64
-	Leafsize         uint64
-	Stripesize       uint64
-	Ref_cows         int32
-	Track_dirty      int32
-	Type             uint64
-	Highest_inode    uint64
-	Last_inode_alloc uint64
-	Dirty_list       List_head
-	Rb_node          Rb_node
-}
-type Extent_state struct {
-	Node  Cache_extent
-	Start uint64
-	End   uint64
-	Refs  int32
-
+type ExtentState struct {
+	Node     CacheExtent
+	Start    uint64
+	End      uint64
+	Refs     int32
 	State    uint64
 	Xprivate uint64
 }
-type Extent_buffer struct {
-	Cache_node Cache_extent
-	Start      uint64
-	Dev_bytenr uint64
-	Len        uint64
-	Tree       *Extent_io_tree
-	Lru        List_head
-	Recow      List_head
-	Refs       int32
-	Flags      int32
-	Fd         int32
-	Data       []byte
+type ExtentBuffer struct {
+	CacheNode CacheExtent
+	Start     uint64
+	DevBytenr uint64
+	Len       uint64
+	Tree      *ExtentIoTree
+	Lru       *list.List
+	Recow     *list.List
+	Refs      int32
+	Flags     int32
+	Fd        int32
+	Data      []byte
 }
-type Btrfs_free_space struct {
-	Index  Rb_node
+type BtrfsFreeSpace struct {
+	Index  RbNode
 	Offset uint64
 	Bytes  uint64
 	Bitmap *uint64
-	List   List_head
+	List   *list.List
 }
-type Btrfs_free_space_ctl struct {
-	Free_space_offset Rb_root
-	Free_space        uint64
-	Extents_thresh    int32
-	Free_extents      int32
-	Total_bitmaps     int32
-	Unit              int32
-	Start             uint64
-	Private           *byte
+type BtrfsFreeSpaceCtl struct {
+	FreeSpaceOffset RbRoot
+	FreeSpace       uint64
+	ExtentsThresh   int32
+	FreeExtents     int32
+	TotalBitmaps    int32
+	Unit            int32
+	Start           uint64
+	Private         *byte
 }
-type Btrfs_ioctl_vol_args struct {
+type BtrfsIoctlVolArgs struct {
 	Fd   int64
 	Name [4088]int8
 }
-type Btrfs_qgroup_limit struct {
-	Flags          uint64
-	Max_referenced uint64
-	Max_exclusive  uint64
-	Rsv_referenced uint64
-	Rsv_exclusive  uint64
+type BtrfsQgroupLimit struct {
+	Flags         uint64
+	MaxReferenced uint64
+	MaxExclusive  uint64
+	RsvReferenced uint64
+	RsvExclusive  uint64
 }
-type Btrfs_qgroup_inherit struct {
-	Flags           uint64
-	Num_groups      uint64
-	Num_ref_copies  uint64
-	Num_excl_copies uint64
-	Lim             Btrfs_qgroup_limit
-	Qgroups         [0]uint64
+type BtrfsQgroupInherit struct {
+	Flags         uint64
+	NumGroups     uint64
+	NumRefCopies  uint64
+	NumExclCopies uint64
+	Lim           BtrfsQgroupLimit
+	Qgroups       [0]uint64
 }
-type Btrfs_ioctl_qgroup_limit_args struct {
+type BtrfsIoctlQgroupLimitArgs struct {
 	Qgroupid uint64
-	Lim      Btrfs_qgroup_limit
+	Lim      BtrfsQgroupLimit
 }
-type Btrfs_ioctl_vol_args_v2 struct {
+type BtrfsIoctlVolArgsV2 struct {
 	Fd      int64
 	Transid uint64
 	Flags   uint64
 	Anon0   [32]byte
 	Name    [4040]int8
 }
-type Btrfs_scrub_progress struct {
-	Data_extents_scrubbed uint64
-	Tree_extents_scrubbed uint64
-	Data_bytes_scrubbed   uint64
-	Tree_bytes_scrubbed   uint64
-	Read_errors           uint64
-	Csum_errors           uint64
-	Verify_errors         uint64
-	No_csum               uint64
-	Csum_discards         uint64
-	Super_errors          uint64
-	Malloc_errors         uint64
-	Uncorrectable_errors  uint64
-	Corrected_errors      uint64
-	Last_physical         uint64
-	Unverified_errors     uint64
+type BtrfsScrubProgress struct {
+	DataExtentsScrubbed uint64
+	TreeExtentsScrubbed uint64
+	DataBytesScrubbed   uint64
+	TreeBytesScrubbed   uint64
+	ReadErrors          uint64
+	CsumErrors          uint64
+	VerifyErrors        uint64
+	NoCsum              uint64
+	CsumDiscards        uint64
+	SuperErrors         uint64
+	MallocErrors        uint64
+	UncorrectableErrors uint64
+	CorrectedErrors     uint64
+	LastPhysical        uint64
+	UnverifiedErrors    uint64
 }
-type Btrfs_ioctl_scrub_args struct {
+type BtrfsIoctlScrubArgs struct {
 	Devid    uint64
 	Start    uint64
 	End      uint64
 	Flags    uint64
-	Progress Btrfs_scrub_progress
+	Progress BtrfsScrubProgress
 	Unused   [109]uint64
 }
-type Btrfs_ioctl_dev_replace_start_params struct {
-	Srcdevid                      uint64
-	Cont_reading_from_srcdev_mode uint64
-	Srcdev_name                   [1025]uint8
-	Tgtdev_name                   [1025]uint8
+type BtrfsIoctlDevReplaceStartParams struct {
+	Srcdevid                  uint64
+	ContReadingFromSrcdevMode uint64
+	SrcdevName                [1025]uint8
+	TgtdevName                [1025]uint8
 }
-type Btrfs_ioctl_dev_replace_status_params struct {
-	Replace_state                 uint64
-	Progress_1000                 uint64
-	Time_started                  uint64
-	Time_stopped                  uint64
-	Num_write_errors              uint64
-	Num_uncorrectable_read_errors uint64
+type BtrfsIoctlDevReplaceStatusParams struct {
+	ReplaceState               uint64
+	Progress_1000              uint64
+	TimeStarted                uint64
+	TimeStopped                uint64
+	NumWriteErrors             uint64
+	NumUncorrectableReadErrors uint64
 }
-type Btrfs_ioctl_dev_replace_args struct {
+type BtrfsIoctlDevReplaceArgs struct {
 	Cmd    uint64
 	Result uint64
 	Anon0  [2072]byte
 	Spare  [64]uint64
 }
-type Btrfs_ioctl_dev_info_args struct {
-	Devid       uint64
-	Uuid        [16]uint8
-	Bytes_used  uint64
-	Total_bytes uint64
-	Unused      [379]uint64
-	Path        [1024]uint8
+type BtrfsIoctlDevInfoArgs struct {
+	Devid      uint64
+	Uuid       [16]uint8
+	BytesUsed  uint64
+	TotalBytes uint64
+	Unused     [379]uint64
+	Path       [1024]uint8
 }
-type Btrfs_ioctl_fs_info_args struct {
-	Max_id      uint64
-	Num_devices uint64
-	Fsid        [16]uint8
-	Reserved    [124]uint64
+type BtrfsIoctlFsInfoArgs struct {
+	MaxId      uint64
+	NumDevices uint64
+	Fsid       [16]uint8
+	Reserved   [124]uint64
 }
-type Btrfs_balance_args struct {
+type BtrfsBalanceArgs struct {
 	Profiles uint64
 	Usage    uint64
 	Devid    uint64
@@ -691,270 +696,279 @@ type Btrfs_balance_args struct {
 	Limit    uint64
 	Unused   [7]uint64
 }
-type Btrfs_balance_progress struct {
+type BtrfsBalanceProgress struct {
 	Expected   uint64
 	Considered uint64
 	Completed  uint64
 }
-type Btrfs_ioctl_balance_args struct {
+type BtrfsIoctlBalanceArgs struct {
 	Flags  uint64
 	State  uint64
-	Data   Btrfs_balance_args
-	Meta   Btrfs_balance_args
-	Sys    Btrfs_balance_args
-	Stat   Btrfs_balance_progress
+	Data   BtrfsBalanceArgs
+	Meta   BtrfsBalanceArgs
+	Sys    BtrfsBalanceArgs
+	Stat   BtrfsBalanceProgress
 	Unused [72]uint64
 }
-type Btrfs_ioctl_search_key struct {
-	Tree_id      uint64
-	Min_objectid uint64
-	Max_objectid uint64
-	Min_offset   uint64
-	Max_offset   uint64
-	Min_transid  uint64
-	Max_transid  uint64
-	Min_type     uint64
-	Max_type     uint64
-	Nr_items     uint64
-	Unused       uint64
-	Unused1      uint64
-	Unused2      uint64
-	Unused3      uint64
-	Unused4      uint64
+type BtrfsIoctlSearchKey struct {
+	TreeId      uint64
+	MinObjectid uint64
+	MaxObjectid uint64
+	MinOffset   uint64
+	MaxOffset   uint64
+	MinTransid  uint64
+	MaxTransid  uint64
+	MinType     uint64
+	MaxType     uint64
+	NrItems     uint64
+	Unused      uint64
+	Unused1     uint64
+	Unused2     uint64
+	Unused3     uint64
+	Unused4     uint64
 }
-type Btrfs_ioctl_search_header struct {
+type BtrfsIoctlSearchHeader struct {
 	Transid  uint64
 	Objectid uint64
 	Offset   uint64
 	Type     uint64
 	Len      uint64
 }
-type Btrfs_ioctl_search_args struct {
-	Key Btrfs_ioctl_search_key
+type BtrfsIoctlSearchArgs struct {
+	Key BtrfsIoctlSearchKey
 	Buf [3976]int8
 }
-type Btrfs_ioctl_ino_lookup_args struct {
+type BtrfsIoctlInoLookupArgs struct {
 	Treeid   uint64
 	Objectid uint64
 	Name     [4080]int8
 }
-type Btrfs_ioctl_defrag_range_args struct {
-	Start         uint64
-	Len           uint64
-	Flags         uint64
-	Extent_thresh uint64
-	Compress_type uint64
-	Unused        [4]uint64
+type BtrfsIoctlDefragRangeArgs struct {
+	Start        uint64
+	Len          uint64
+	Flags        uint64
+	ExtentThresh uint64
+	CompressType uint64
+	Unused       [4]uint64
 }
-type Btrfs_ioctl_space_info struct {
-	Flags       uint64
-	Total_bytes uint64
-	Used_bytes  uint64
+type BtrfsIoctlSpaceInfo struct {
+	Flags      uint64
+	TotalBytes uint64
+	UsedBytes  uint64
 }
-type Btrfs_ioctl_space_args struct {
-	Space_slots  uint64
-	Total_spaces uint64
-	Spaces       [0]Btrfs_ioctl_space_info
+type BtrfsIoctlSpaceArgs struct {
+	SpaceSlots  uint64
+	TotalSpaces uint64
+	Spaces      [0]BtrfsIoctlSpaceInfo
 }
-type Btrfs_data_container struct {
-	Bytes_left    uint64
-	Bytes_missing uint64
-	Elem_cnt      uint64
-	Elem_missed   uint64
-	Val           [0]uint64
+type BtrfsDataContainer struct {
+	BytesLeft    uint64
+	BytesMissing uint64
+	ElemCnt      uint64
+	ElemMissed   uint64
+	Val          [0]uint64
 }
-type Btrfs_ioctl_ino_path_args struct {
+type BtrfsIoctlInoPathArgs struct {
 	Inum     uint64
 	Size     uint64
 	Reserved [4]uint64
 	Fspath   uint64
 }
-type Btrfs_ioctl_logical_ino_args struct {
+type BtrfsIoctlLogicalInoArgs struct {
 	Logical  uint64
 	Size     uint64
 	Reserved [4]uint64
 	Inodes   uint64
 }
-type Btrfs_ioctl_timespec struct {
+type BtrfsIoctlTimespec struct {
 	Sec  uint64
 	Nsec uint64
 }
-type Btrfs_ioctl_received_subvol_args struct {
+type BtrfsIoctlReceivedSubvolArgs struct {
 	Uuid     [16]int8
 	Stransid uint64
 	Rtransid uint64
-	Stime    Btrfs_ioctl_timespec
-	Rtime    Btrfs_ioctl_timespec
+	Stime    BtrfsIoctlTimespec
+	Rtime    BtrfsIoctlTimespec
 	Flags    uint64
 	Reserved [16]uint64
 }
-type Btrfs_ioctl_send_args struct {
-	Send_fd             int64
-	Clone_sources_count uint64
-	Clone_sources       *uint64
-	Parent_root         uint64
-	Flags               uint64
-	Reserved            [4]uint64
+type BtrfsIoctlSendArgs struct {
+	SendFd            int64
+	CloneSourcesCount uint64
+	CloneSources      *uint64
+	ParentRoot        uint64
+	Flags             uint64
+	Reserved          [4]uint64
 }
-type Btrfs_ioctl_get_dev_stats struct {
+type BtrfsIoctlGetDevStats struct {
 	Devid  uint64
 	Items  uint64
 	Flags  uint64
 	Values [5]uint64
 	Unused [121]uint64
 }
-type Btrfs_ioctl_quota_ctl_args struct {
+type BtrfsIoctlQuotaCtlArgs struct {
 	Cmd    uint64
 	Status uint64
 }
-type Btrfs_ioctl_quota_rescan_args struct {
+type BtrfsIoctlQuotaRescanArgs struct {
 	Flags    uint64
 	Progress uint64
 	Reserved [6]uint64
 }
-type Btrfs_ioctl_qgroup_assign_args struct {
+type BtrfsIoctlQgroupAssignArgs struct {
 	Assign uint64
 	Src    uint64
 	Dst    uint64
 }
-type Btrfs_ioctl_qgroup_create_args struct {
+type BtrfsIoctlQgroupCreateArgs struct {
 	Create   uint64
 	Qgroupid uint64
 }
-type Btrfs_ioctl_clone_range_args struct {
-	Src_fd      int64
-	Src_offset  uint64
-	Src_length  uint64
-	Dest_offset uint64
+type BtrfsIoctlCloneRangeArgs struct {
+	SrcFd      int64
+	SrcOffset  uint64
+	SrcLength  uint64
+	DestOffset uint64
 }
-type Vma_shared struct {
-	Tree_node int32
+type VmaShared struct {
+	TreeNode int32
 }
-type Vm_area_struct struct {
+type VmAreaStruct struct {
 	Pgoff  uint64
 	Start  uint64
 	End    uint64
-	Shared Vma_shared
+	Shared VmaShared
 }
 type Page struct {
 	Index uint64
 }
-type Radix_tree_root struct{}
-type Btrfs_corrupt_block struct {
-	Cache Cache_extent
-	Key   Btrfs_key
+type RadixTreeRoot struct{}
+type BtrfsCorruptBlock struct {
+	Cache CacheExtent
+	Key   BtrfsKey
 	Level int32
 }
-type Btrfs_stream_header struct {
-	Magic [13]int8
-
+type BtrfsStreamHeader struct {
+	Magic   [13]int8
 	Version uint64
 }
-type Btrfs_cmd_header struct {
+type BtrfsCmdHeader struct {
 	Len uint64
 	Cmd uint16
-
 	Crc uint64
 }
-type Btrfs_tlv_header struct {
+type BtrfsTlvHeader struct {
 	Type uint16
 	Len  uint16
 }
-type Subvol_info struct {
-	Root_id       uint64
-	Uuid          [16]uint8
-	Parent_uuid   [16]uint8
-	Received_uuid [16]uint8
-	Ctransid      uint64
-	Otransid      uint64
-	Stransid      uint64
-	Rtransid      uint64
-	Path          *int8
+type SubvolInfo struct {
+	RootId       uint64
+	Uuid         [16]uint8
+	ParentUuid   [16]uint8
+	ReceivedUuid [16]uint8
+	Ctransid     uint64
+	Otransid     uint64
+	Stransid     uint64
+	Rtransid     uint64
+	Path         *int8
 }
-type Subvol_uuid_search struct {
+type SubvolUuidSearch struct {
 	Fd int32
 }
-type Btrfs_trans_handle struct {
-	Transid             uint64
-	Alloc_exclude_start uint64
-	Alloc_exclude_nr    uint64
-	Blocks_reserved     uint64
-	Blocks_used         uint64
-	Block_group         *Btrfs_block_group_cache
+type BtrfsTransHandle struct {
+	Transid           uint64
+	AllocExcludeStart uint64
+	AllocExcludeNr    uint64
+	BlocksReserved    uint64
+	BlocksUsed        uint64
+	BlockGroup        *BtrfsBlockGroupCache
 }
-type Ulist_iterator struct {
-	List *List_head
+type UlistIterator struct {
+	List **list.List
 }
-type Ulist_node struct {
+type UlistNode struct {
 	Val  uint64
 	Aux  uint64
-	List List_head
-	Node Rb_node
+	List *list.List
+	Node RbNode
 }
 type Ulist struct {
 	Nnodes uint64
-	Nodes  List_head
-	Root   Rb_root
+	Nodes  *list.List
+	Root   RbRoot
 }
-type Btrfs_device struct {
-	Dev_list         List_head
-	Dev_root         *Btrfs_root
-	Fs_devices       *Btrfs_fs_devices
-	Total_ios        uint64
-	Fd               int32
-	Writeable        int32
-	Name             *int8
-	Label            *int8
-	Total_devs       uint64
-	Super_bytes_used uint64
-	Devid            uint64
-	Total_bytes      uint64
-	Bytes_used       uint64
-	Io_align         uint64
-	Io_width         uint64
-	Sector_size      uint64
-	Type             uint64
-	Uuid             [16]uint8
+type BtrfsDevice struct {
+	DevList        *list.List
+	DevRoot        *BtrfsRoot
+	FsDevices      *BtrfsFsDevices
+	TotalIos       uint64
+	Fd             int32
+	Writeable      int32
+	Name           *int8
+	Label          *int8
+	TotalDevs      uint64
+	SuperBytesUsed uint64
+	Devid          uint64
+	TotalBytes     uint64
+	BytesUsed      uint64
+	IoAlign        uint64
+	IoWidth        uint64
+	SectorSize     uint64
+	Type           uint64
+	Uuid           [16]uint8
 }
-type Btrfs_fs_devices struct {
-	Fsid         [16]uint8
-	Latest_devid uint64
-	Latest_trans uint64
-	Lowest_devid uint64
-	Latest_bdev  int32
-	Lowest_bdev  int32
-	Devices      List_head
-	List         List_head
-	Seeding      int32
-
-	Seed *Btrfs_fs_devices
+type BtrfsFsDevices struct {
+	Fsid        [16]uint8
+	LatestDevid uint64
+	LatestTrans uint64
+	LowestDevid uint64
+	LatestBdev  int32
+	LowestBdev  int32
+	Devices     *list.List
+	List        *list.List
+	Seeding     int32
+	Seed        *BtrfsFsDevices
 }
-type Btrfs_bio_stripe struct {
-	Dev      *Btrfs_device
+type BtrfsBioStripe struct {
+	Dev      *BtrfsDevice
 	Physical uint64
 }
-type Btrfs_multi_bio struct {
-	Error       int32
-	Num_stripes int32
-	Stripes     [0]Btrfs_bio_stripe
+type BtrfsMultiBio struct {
+	Error      int32
+	NumStripes int32
+	Stripes    [0]BtrfsBioStripe
 }
-type Map_lookup struct {
-	Ce          Cache_extent
-	Type        uint64
-	Io_align    int32
-	Io_width    int32
-	Stripe_len  int32
-	Sector_size int32
-	Num_stripes int32
-	Sub_stripes int32
-	Stripes     [0]Btrfs_bio_stripe
+type MapLookup struct {
+	Ce         CacheExtent
+	Type       uint64
+	IoAlign    int32
+	IoWidth    int32
+	StripeLen  int32
+	SectorSize int32
+	NumStripes int32
+	SubStripes int32
+	Stripes    [0]BtrfsBioStripe
 }
-type Btrfs_extent_ops struct {
-	Alloc_extent *[0]byte
-	Free_extent  *[0]byte
+type BtrfsExtentOps struct {
+	AllocExtent *[0]byte
+	FreeExtent  *[0]byte
 }
-type Device_scan struct {
-	Rc  *Recover_control
-	Dev *Btrfs_device
+type DeviceScan struct {
+	Rc  *RecoverControl
+	Dev *BtrfsDevice
 	Fd  int
+}
+type ExtentRecord struct {
+	CacheExtent
+	Generation uint64
+	Csum       [BTRFS_CSUM_SIZE]uint8
+	Devices    [BTRFS_MAX_MIRRORS](*BtrfsDevice)
+	Offsets    [BTRFS_MAX_MIRRORS]uint64
+	Nmirrors   uint32
+}
+
+func (x *ExtentRecord) Less(y llrb.Item) bool {
+	return (x.Start + x.Size) <= y.(*ExtentRecord).Start
 }
