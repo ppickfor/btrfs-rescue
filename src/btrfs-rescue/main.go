@@ -4,6 +4,7 @@ import (
 	. "btrfs"
 	"bufio"
 	"bytes"
+	"code.google.com/p/go.net/context"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -46,8 +47,16 @@ type itemBlock struct {
 // reads super block into sb at offset sbBytenr
 // if superRecover is != 0 then read superblock backups and find latest generation
 func main() {
-
-	flag.Parse() // Scan the arguments list
+	// ctx is the Context for this handler. Calling cancel closes the
+	// ctx.Done channel, which is the cancellation signal for requests
+	// started by this handler.
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel() // Cancel ctx as soon as
+	flag.Parse()   // Scan the arguments list
 	if *versionFlag {
 		fmt.Println("Version:", APP_VERSION)
 	}
@@ -58,10 +67,10 @@ func main() {
 	headerBlockchan := make(chan treeBlock, 40)
 	itemBlockChan := make(chan itemBlock, 40)
 	//	var items *[]BtrfsItem
-	go byteConsumer(bytenrChan, csumBlockChan, rc)
-	go csumByteblock(csumBlockChan, headerBlockchan)
-	go headerConsumer(headerBlockchan, itemBlockChan, rc)
-	go processItems(itemBlockChan, rc)
+	go byteConsumer(ctx, cancel, bytenrChan, csumBlockChan, rc)
+	go csumByteblock(ctx, cancel, csumBlockChan, headerBlockchan)
+	go headerConsumer(ctx, cancel, headerBlockchan, itemBlockChan, rc)
+	go processItems(ctx, cancel, itemBlockChan, rc)
 	//	treeBlock := new(treeBlock)
 	//			fmt.Printf("rc: %+v\n", rc)
 	size := uint64(rc.Leafsize)
@@ -70,8 +79,14 @@ func main() {
 		// read treeblock from disk and pass to channel for processing
 		start := uint64(*startblocksFlag) * size
 		end := uint64(*blocksFlag) * size
+	countFromParams:
 		for bytenr := start; bytenr < end; bytenr += size {
-			bytenrChan <- bytenr
+			select {
+			case <-ctx.Done():
+				fmt.Printf("Done countFromParams\n")
+				break countFromParams
+			case bytenrChan <- bytenr:
+			}
 		}
 	} else {
 		file, err := os.Open(*bytenrFlag)
@@ -80,12 +95,18 @@ func main() {
 		}
 		defer file.Close()
 		scanner := bufio.NewScanner(file)
+	readFromFile:
 		for i := 0; scanner.Scan(); i++ {
 			bytenr, err := strconv.ParseUint(scanner.Text(), 10, 64)
 			if err != nil {
 				fmt.Println(err)
 			}
-			bytenrChan <- bytenr
+			select {
+			case <-ctx.Done():
+				fmt.Printf("Done readFromFile\n")
+				break readFromFile
+			case bytenrChan <- bytenr:
+			}
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Println(err)
@@ -109,70 +130,114 @@ func main() {
 }
 
 // byteConsumer reads bytenr from bytenrschan reads the treeblock and sends it to csumBlockChan
-func byteConsumer(bytenrsChan <-chan uint64, csumBlockChan chan<- treeBlock, rc *RecoverControl) {
+func byteConsumer(ctx context.Context, cancel context.CancelFunc, bytenrsChan <-chan uint64, csumBlockChan chan<- treeBlock, rc *RecoverControl) {
+
 	treeBlock := new(treeBlock)
 	size := uint64(rc.Leafsize)
 	fsid := rc.Fsid[:]
 	off0 := BtrfsSbOffset(0)
 	off1 := BtrfsSbOffset(1)
 	off2 := BtrfsSbOffset(2)
+	treeBlock.byteblock = make([]byte, size)
+	byteblock := make([]byte, size)
+	defer close(csumBlockChan)
 loop:
-	for bytenr := range bytenrsChan {
-		switch bytenr {
-		case off0, off1, off2:
-			continue loop
-		default:
-			byteblock := make([]byte, size)
-			//					fmt.Printf("size: %d, byteblock: %v\n", size, byteblock)
-			ok, err := BtrfsReadTreeblock(rc.Fd, bytenr, size, fsid, &byteblock)
-			if err != nil {
-				fmt.Println(err)
-				break loop
-			}
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Done byteConsumer\n")
+			return
+		case bytenr, ok := <-bytenrsChan:
+			//			fmt.Printf("got byte %08x, staus %v\r", bytenr, ok)
 			if ok {
-				treeBlock.bytenr = bytenr
-				treeBlock.byteblock = byteblock
-				csumBlockChan <- *treeBlock
+				switch bytenr {
+				case off0, off1, off2:
+					continue loop
+				default:
+					//					fmt.Printf("size: %d, byteblock: %v\n", size, byteblock)
+					ok, err := BtrfsReadTreeblock(rc.Fd, bytenr, size, fsid, &byteblock)
+					if err != nil {
+						fmt.Println(err)
+						fmt.Printf("\n\n cancel byteConsumer %v\n\n", err)
+						cancel()
+						break loop
+					}
+					if ok {
+						treeBlock.bytenr = bytenr
+						copy(treeBlock.byteblock, byteblock)
+						csumBlockChan <- *treeBlock
+					}
+				}
+			} else {
+				fmt.Printf("\n\n cancel byteConsumer %v\n\n", ok)
+				cancel()
+				return
 			}
 		}
 	}
-	close(csumBlockChan)
+	//	for bytenr := range bytenrsChan {
+
 }
 
 // csumByteblock check crc of the treeBlocks byte buffer implemented as a channel filter
-func csumByteblock(in <-chan (treeBlock), out chan<- (treeBlock)) {
+func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (treeBlock), out chan<- (treeBlock)) {
 	//	var inc,outc,ins,outs int
-	for treeBlock := range in {
-		byteblock := treeBlock.byteblock
-		csum := uint32(0)
-		bytebr := bytes.NewReader(byteblock)
-		binary.Read(bytebr, binary.LittleEndian, &csum)
-		crc := crc32.Checksum((byteblock)[BTRFS_CSUM_SIZE:], Crc32c)
-		if crc != csum {
-			bytenr := treeBlock.bytenr
-			fmt.Printf("crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
-		} else {
-			out <- treeBlock
+	csum := uint32(0)
+	defer close(out)
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Done csumByteblock\n")
+			return
+		case treeBlock, ok := <-in:
+			if ok {
+				byteblock := treeBlock.byteblock
+				bytebr := bytes.NewReader(byteblock)
+				binary.Read(bytebr, binary.LittleEndian, &csum)
+				crc := crc32.Checksum((byteblock)[BTRFS_CSUM_SIZE:], Crc32c)
+				if crc != csum {
+					bytenr := treeBlock.bytenr
+					fmt.Printf("crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
+				} else {
+					out <- treeBlock
+				}
+				//		fmt.Printf("read treeblock @%d, %v\n",bytenr,(*byteblock)[0:4])
+				//		inc++
+				//		outc++
+				//		ins= ins+len(in)
+				//		outs=outs+len(out)
+				//		fmt.Printf("csumByteblock Chan len in: %03.2f out: %03.2f\r",float64(ins)/float64(inc),float64(outs)/float64(outc))
+			} else {
+				fmt.Printf("\n\n cancel csumByteblock, %v\n\n", ok)
+				cancel()
+				return
+			}
 		}
-		//		fmt.Printf("read treeblock @%d, %v\n",bytenr,(*byteblock)[0:4])
-		//		inc++
-		//		outc++
-		//		ins= ins+len(in)
-		//		outs=outs+len(out)
-		//		fmt.Printf("csumByteblock Chan len in: %03.2f out: %03.2f\r",float64(ins)/float64(inc),float64(outs)/float64(outc))
 	}
-	close(out)
 }
 
 // headerConsumer reads blocks from headerBlockchan and processes them via detailBlock
-func headerConsumer(headerBlockchan <-chan (treeBlock), itemBlockChan chan itemBlock, rc *RecoverControl) {
+func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockchan <-chan (treeBlock), itemBlockChan chan itemBlock, rc *RecoverControl) {
 
 	// process treeblock from goroutine via channel
-	for treeBlock := range headerBlockchan {
-		//			treeBlock = treeBlock
-		//		fmt.Printf("treeBlock: %+v\n", treeBlock)
-		//		fmt.Printf("from chan treeblock: @%d, %v\n", treeBlock.bytent, treeBlock.byteblock[0:4])
-		detailBlock(&treeBlock, itemBlockChan, rc)
+	defer close(itemBlockChan)
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Done headerConsumer\n")
+			return
+		case treeBlock, ok := <-headerBlockchan:
+			if ok {
+				//			treeBlock = treeBlock
+				//		fmt.Printf("treeBlock: %+v\n", treeBlock)
+				//		fmt.Printf("from chan treeblock: @%d, %v\n", treeBlock.bytent, treeBlock.byteblock[0:4])
+				detailBlock(&treeBlock, itemBlockChan, rc)
+			} else {
+				fmt.Printf("\n\n cancel headerConsumer %v\n\n", ok)
+				cancel()
+				return
+			}
+		}
 	}
 }
 
@@ -227,33 +292,46 @@ again:
 }
 
 // processItems reads items from itemBlockChan and processes the leaves
-func processItems(itemBlockChan chan (itemBlock), rc *RecoverControl) {
+func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan chan (itemBlock), rc *RecoverControl) {
 
 	// process items in new treeblock
-	for itemBlock := range itemBlockChan {
-		level := itemBlock.Level
-		nritems := itemBlock.Nritems
-		owner := itemBlock.Owner
-		generation := itemBlock.Generation
-		infoByteBlock := itemBlock.InfoByteBlock
-		bytereader := bytes.NewReader(infoByteBlock)
-		if level == 0 {
-			// Leaf
-			items := make([]BtrfsItem, nritems)
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Done processItems\n")
+			return
+		case itemBlock, ok := <-itemBlockChan:
+			if ok {
+				level := itemBlock.Level
+				nritems := itemBlock.Nritems
+				owner := itemBlock.Owner
+				generation := itemBlock.Generation
+				infoByteBlock := itemBlock.InfoByteBlock
+				bytereader := bytes.NewReader(infoByteBlock)
+				if level == 0 {
+					// Leaf
+					items := make([]BtrfsItem, nritems)
 
-			_ = binary.Read(bytereader, binary.LittleEndian, items)
-			//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
-			switch owner {
-			case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
-				/* different tree use different generation */
-				//			if header.Generation <= rc.Generation {
-				extractMetadataRecord(rc, generation, items, infoByteBlock)
-				//			}
-			case BTRFS_CHUNK_TREE_OBJECTID:
-				//			if header.Generation <= rc.ChunkRootGeneration {
-				extractMetadataRecord(rc, generation, items, infoByteBlock)
-				//			}
+					_ = binary.Read(bytereader, binary.LittleEndian, items)
+					//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
+					switch owner {
+					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
+						/* different tree use different generation */
+						//			if header.Generation <= rc.Generation {
+						extractMetadataRecord(rc, generation, items, infoByteBlock)
+						//			}
+					case BTRFS_CHUNK_TREE_OBJECTID:
+						//			if header.Generation <= rc.ChunkRootGeneration {
+						extractMetadataRecord(rc, generation, items, infoByteBlock)
+						//			}
+					}
+				}
+			} else {
+				fmt.Printf("\n\n cancel processItems %+v\n\n", ok)
+				cancel()
+				return
 			}
+
 		}
 	}
 }
