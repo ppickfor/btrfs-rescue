@@ -91,7 +91,7 @@ type Stripe struct {
 type ChunkRecord struct {
 	Cache      CacheExtent
 	List       *list.List
-	Dextents   *list.List
+	Dextents   *list.Element
 	BgRec      *BlockGroupRecord
 	Generation uint64
 	Objectid   uint64
@@ -106,7 +106,15 @@ type ChunkRecord struct {
 	IoAlign    uint64
 	IoWidth    uint64
 	SectorSize uint64
-	Stripes    [0]Stripe
+	Stripes    []Stripe
+}
+
+func NewChunkRecord() *ChunkRecord {
+	return &ChunkRecord{}
+
+}
+func (x *ChunkRecord) Less(y llrb.Item ) bool {
+	return false
 }
 type DeviceExtentRecord struct {
 	CacheExtent

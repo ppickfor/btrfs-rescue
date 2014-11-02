@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"code.google.com/p/go.net/context"
+	"container/list"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -349,7 +350,7 @@ func extractMetadataRecord(rc *RecoverControl, generation uint64, items []BtrfsI
 			//			break;
 		case BTRFS_CHUNK_ITEM_KEY:
 			//			pthreadMutexLock(&rc->rcLock);
-			//			ret = processChunkItem(&rc->chunk, leaf, &key, i);
+			processChunkItem(rc.Chunk, generation, &item, itemBuf)
 			//			pthreadMutexUnlock(&rc->rcLock);
 			//			break;
 		case BTRFS_DEV_EXTENT_KEY:
@@ -436,4 +437,174 @@ again:
 	devextCache.Tree.InsertNoReplace(rec)
 	rec.ChunkList = devextCache.ChunkOrphans.PushBack(rec.ChunkList)
 	rec.DeviceList = devextCache.DeviceOrphans.PushBack(rec.DeviceList)
+}
+func processChunkItem(chunkCache *llrb.LLRB, generation uint64, item *BtrfsItem, itemBuf []byte) {
+
+	rec := NewChunkRecord()
+again:
+	if i := chunkCache.Get(rec); i != nil {
+		exists := i.(*ChunkRecord)
+		if exists.Generation > rec.Generation {
+			return
+		}
+		if exists.Generation == rec.Generation {
+			numStripes := rec.NumStripes
+			if exists.NumStripes != numStripes {
+				fmt.Printf("processChunkItem: same generation but different details %+v\n", rec)
+				// compare everything from generation to end of the record (varies by num stripes)
+				//int num_stripes = rec->num_stripes;
+				//			int rec_size = btrfs_chunk_record_size(num_stripes);
+				//			int offset = offsetof(struct chunk_record, generation);
+				//
+				//			if (exist->num_stripes != rec->num_stripes ||
+				//			    memcmp(((void *)exist) + offset,
+				//				   ((void *)rec) + offset,
+				//				   rec_size - offset))
+				//				ret = -EEXIST;
+				//			goto free_out;
+				return
+			}
+		}
+		chunkCache.Delete(exists)
+		goto again
+	}
+	chunkCache.InsertNoReplace(rec)
+}
+func calcStripeLength(typeFlags, length uint64, numStripes uint16) uint64 {
+	var stripeSize uint64
+	switch {
+	case typeFlags&BTRFS_BLOCK_GROUP_RAID0 == 0:
+		stripeSize = length
+		stripeSize /= uint64(numStripes)
+	case typeFlags&BTRFS_BLOCK_GROUP_RAID10 == 0:
+		stripeSize = length * 2
+		stripeSize /= uint64(numStripes)
+	case typeFlags&BTRFS_BLOCK_GROUP_RAID5 == 0:
+		stripeSize = length
+		stripeSize /= (uint64(numStripes) - 1)
+	case typeFlags&BTRFS_BLOCK_GROUP_RAID6 == 0:
+		stripeSize = length
+		stripeSize /= (uint64(numStripes) - 2)
+	default:
+		stripeSize = length
+	}
+	return stripeSize
+}
+func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devExtentTree *DeviceExtentTree, silent bool) bool {
+
+	ret := true
+	if i := blockGroupTree.Tree.Get(&BlockGroupRecord{CacheExtent: CacheExtent{Start: chunkRec.Offset, Size: chunkRec.Length}}); i != nil {
+		blockGroupRec := i.(*BlockGroupRecord)
+		if chunkRec.Length != blockGroupRec.Offset || chunkRec.Offset != blockGroupRec.Objectid || chunkRec.TypeFlags != blockGroupRec.Flags {
+			if !silent {
+				fmt.Printf("Chunk[%llu, %u, %llu]: length(%llu), offset(%llu), type(%llu) mismatch with block group[%llu, %u, %llu]: offset(%llu), objectid(%llu), flags(%llu)\n",
+					chunkRec.Objectid,
+					chunkRec.Type,
+					chunkRec.Offset,
+					chunkRec.Length,
+					chunkRec.Offset,
+					chunkRec.TypeFlags,
+					blockGroupRec.Objectid,
+					blockGroupRec.Type,
+					blockGroupRec.Offset,
+					blockGroupRec.Offset,
+					blockGroupRec.Objectid,
+					blockGroupRec.Flags)
+				ret = false
+			} else {
+				chunkRec.List = nil
+				chunkRec.BgRec = blockGroupRec
+			}
+		} else {
+			if !silent {
+				fmt.Printf("Chunk[%llu, %u, %llu]: length(%llu), offset(%llu), type(%llu) is not found in block group\n",
+					chunkRec.Objectid,
+					chunkRec.Type,
+					chunkRec.Offset,
+					chunkRec.Length,
+					chunkRec.Offset,
+					chunkRec.TypeFlags)
+				ret = false
+
+			}
+		}
+	}
+	length := calcStripeLength(chunkRec.TypeFlags, chunkRec.Length, chunkRec.NumStripes)
+	for i := uint16(0); i < chunkRec.NumStripes; i++ {
+		devid := chunkRec.Stripes[i].Devid
+		offset := chunkRec.Stripes[i].Offset
+		if item := devExtentTree.Tree.Get(&DeviceExtentRecord{CacheExtent: CacheExtent{Objectid: devid, Start: offset, Size: length}}); item != nil {
+			devExtentRec := item.(*DeviceExtentRecord)
+			if devExtentRec.Objectid != devid ||
+				devExtentRec.Offset != offset ||
+				devExtentRec.ChunkOffset != chunkRec.Offset ||
+				devExtentRec.Length != length {
+				if !silent {
+					fmt.Printf(
+						"Chunk[%llu, %u, %llu] stripe[%llu, %llu] dismatch dev extent[%llu, %llu, %llu]\n",
+						chunkRec.Objectid,
+						chunkRec.Type,
+						chunkRec.Offset,
+						chunkRec.Stripes[i].Devid,
+						chunkRec.Stripes[i].Offset,
+						devExtentRec.Objectid,
+						devExtentRec.Offset,
+						devExtentRec.Length)
+					ret = false
+				} else {
+					devExtentRec.ChunkList = chunkRec.Dextents
+					chunkRec.Dextents = nil
+				}
+			}
+		} else {
+			if !silent {
+				fmt.Printf(
+					"Chunk[%llu, %u, %llu] stripe[%llu, %llu] is not found in dev extent\n",
+					chunkRec.Objectid,
+					chunkRec.Type,
+					chunkRec.Offset,
+					chunkRec.Stripes[i].Devid,
+					chunkRec.Stripes[i].Offset)
+				ret = false
+			}
+		}
+	}
+	return ret
+}
+func checkChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceExtentTree *DeviceExtentTree, good, bad *list.List, silent bool) bool {
+	var ret bool
+	chunkCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		chunkRec := i.(*ChunkRecord)
+		err := checkChunkRefs(chunkRec, blockGroupTree, deviceExtentTree, silent)
+		if err {
+			ret = err
+			if bad != nil {
+				chunkRec.List.PushBack(bad)
+			}
+		} else {
+			if good != nil {
+				chunkRec.List.PushBack(good)
+			}
+		}
+		return true
+	})
+	if !silent {
+		for item := blockGroupTree.Block_Groups.Front(); item != nil; item = item.Next() {
+			i := item.Value
+			bgRec := i.(*BlockGroupRecord)
+			fmt.Printf("Block group[%llu, %llu] (flags = %llu) didn't find the relative chunk.\n",
+				bgRec.Objectid,
+				bgRec.Offset,
+				bgRec.Flags)
+		}
+		for item := deviceExtentTree.ChunkOrphans.Front(); item != nil; item = item.Next() {
+			i := item.Value
+			dextRec := i.(*DeviceExtentRecord)
+			fmt.Printf("Device extent[%llu, %llu, %llu] didn't find the relative chunk.\n",
+				dextRec.Objectid,
+				dextRec.Offset,
+				dextRec.Length)
+		}
+	}
+	return ret
 }

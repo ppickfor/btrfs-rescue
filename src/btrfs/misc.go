@@ -25,6 +25,16 @@ const (
 	BTRFS_SYSTEM_CHUNK_ARRAY_SIZE = 2048
 	BTRFS_LABEL_SIZE              = 256
 
+	/* tag for the radix tree of block groups in ram */
+	BTRFS_BLOCK_GROUP_DATA     = (1 << 0)
+	BTRFS_BLOCK_GROUP_SYSTEM   = (1 << 1)
+	BTRFS_BLOCK_GROUP_METADATA = (1 << 2)
+	BTRFS_BLOCK_GROUP_RAID0    = (1 << 3)
+	BTRFS_BLOCK_GROUP_RAID1    = (1 << 4)
+	BTRFS_BLOCK_GROUP_DUP      = (1 << 5)
+	BTRFS_BLOCK_GROUP_RAID10   = (1 << 6)
+	BTRFS_BLOCK_GROUP_RAID5    = (1 << 7)
+	BTRFS_BLOCK_GROUP_RAID6    = (1 << 8)
 	/*
 	 * just in case we somehow lose the roots and are not able to mount,
 	 * we store an array of the roots from previous transactions
