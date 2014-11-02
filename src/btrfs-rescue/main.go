@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -30,6 +31,7 @@ var (
 	blocksFlag      *int64  = flag.Int64("n", DEFAULT_BLOCKS, "The number of BTRFS_SIZE blocks to read")
 	startblocksFlag *int64  = flag.Int64("s", 0, "The number of BTRFS_SIZE blocks to start at")
 	bytenrFlag      *string = flag.String("b", "", "The previously scanned block bytenrs")
+	wg              sync.WaitGroup
 )
 
 type treeBlock struct {
@@ -68,6 +70,7 @@ func main() {
 	headerBlockchan := make(chan treeBlock, 40)
 	itemBlockChan := make(chan itemBlock, 40)
 	//	var items *[]BtrfsItem
+	wg.Add(4)
 	go byteConsumer(ctx, cancel, bytenrChan, csumBlockChan, rc)
 	go csumByteblock(ctx, cancel, csumBlockChan, headerBlockchan)
 	go headerConsumer(ctx, cancel, headerBlockchan, itemBlockChan, rc)
@@ -113,6 +116,7 @@ func main() {
 			fmt.Println(err)
 		}
 	}
+	wg.Wait()
 	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
 	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%+v\n", i)
@@ -141,6 +145,7 @@ func byteConsumer(ctx context.Context, cancel context.CancelFunc, bytenrsChan <-
 	off2 := BtrfsSbOffset(2)
 	byteblock := make([]byte, size)
 	defer close(csumBlockChan)
+	defer wg.Done()
 loop:
 	for {
 		select {
@@ -185,6 +190,7 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 	//	var inc,outc,ins,outs int
 	csum := uint32(0)
 	defer close(out)
+	defer wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
@@ -222,6 +228,7 @@ func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockc
 
 	// process treeblock from goroutine via channel
 	defer close(itemBlockChan)
+	defer wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
@@ -238,6 +245,52 @@ func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockc
 				cancel()
 				return
 			}
+		}
+	}
+}
+
+// processItems reads items from itemBlockChan and processes the leaves
+func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan chan (itemBlock), rc *RecoverControl) {
+
+	defer wg.Done()
+	// process items in new treeblock
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Done processItems\n")
+			return
+		case itemBlock, ok := <-itemBlockChan:
+			if ok {
+				level := itemBlock.Level
+				nritems := itemBlock.Nritems
+				owner := itemBlock.Owner
+				generation := itemBlock.Generation
+				infoByteBlock := itemBlock.InfoByteBlock
+				bytereader := bytes.NewReader(infoByteBlock)
+				if level == 0 {
+					// Leaf
+					items := make([]BtrfsItem, nritems)
+
+					_ = binary.Read(bytereader, binary.LittleEndian, items)
+					//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
+					switch owner {
+					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
+						/* different tree use different generation */
+						//			if header.Generation <= rc.Generation {
+						extractMetadataRecord(rc, generation, items, infoByteBlock)
+						//			}
+					case BTRFS_CHUNK_TREE_OBJECTID:
+						//			if header.Generation <= rc.ChunkRootGeneration {
+						extractMetadataRecord(rc, generation, items, infoByteBlock)
+						//			}
+					}
+				}
+			} else {
+				fmt.Printf("\n\n cancel processItems %+v\n\n", ok)
+				cancel()
+				return
+			}
+
 		}
 	}
 }
@@ -290,51 +343,6 @@ again:
 		InfoByteBlock: byteblock[len(byteblock)-bytereader.Len():],
 	}
 	itemBlockChan <- itemBlock
-}
-
-// processItems reads items from itemBlockChan and processes the leaves
-func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan chan (itemBlock), rc *RecoverControl) {
-
-	// process items in new treeblock
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Printf("Done processItems\n")
-			return
-		case itemBlock, ok := <-itemBlockChan:
-			if ok {
-				level := itemBlock.Level
-				nritems := itemBlock.Nritems
-				owner := itemBlock.Owner
-				generation := itemBlock.Generation
-				infoByteBlock := itemBlock.InfoByteBlock
-				bytereader := bytes.NewReader(infoByteBlock)
-				if level == 0 {
-					// Leaf
-					items := make([]BtrfsItem, nritems)
-
-					_ = binary.Read(bytereader, binary.LittleEndian, items)
-					//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
-					switch owner {
-					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
-						/* different tree use different generation */
-						//			if header.Generation <= rc.Generation {
-						extractMetadataRecord(rc, generation, items, infoByteBlock)
-						//			}
-					case BTRFS_CHUNK_TREE_OBJECTID:
-						//			if header.Generation <= rc.ChunkRootGeneration {
-						extractMetadataRecord(rc, generation, items, infoByteBlock)
-						//			}
-					}
-				}
-			} else {
-				fmt.Printf("\n\n cancel processItems %+v\n\n", ok)
-				cancel()
-				return
-			}
-
-		}
-	}
 }
 
 // extractMetadataRecord iterates items of the current block and proccess each blockgroup, chunk and dev extent adding them to caches
