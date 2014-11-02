@@ -138,7 +138,6 @@ func byteConsumer(ctx context.Context, cancel context.CancelFunc, bytenrsChan <-
 	off0 := BtrfsSbOffset(0)
 	off1 := BtrfsSbOffset(1)
 	off2 := BtrfsSbOffset(2)
-	treeBlock.byteblock = make([]byte, size)
 	byteblock := make([]byte, size)
 	defer close(csumBlockChan)
 loop:
@@ -164,6 +163,7 @@ loop:
 					}
 					if ok {
 						treeBlock.bytenr = bytenr
+						treeBlock.byteblock = make([]byte, size)
 						copy(treeBlock.byteblock, byteblock)
 						csumBlockChan <- *treeBlock
 					}
