@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/binary"
+	//	"fmt"
 	"github.com/petar/GoLLRB/llrb"
 )
 
@@ -89,9 +90,9 @@ type Stripe struct {
 	Uuid   [16]uint8
 }
 type ChunkRecord struct {
-	Cache      CacheExtent
-	List       *list.List
-	Dextents   *list.Element
+	CacheExtent
+	List       *list.Element
+	Dextents   *list.List
 	BgRec      *BlockGroupRecord
 	Generation uint64
 	Objectid   uint64
@@ -103,19 +104,46 @@ type ChunkRecord struct {
 	StripeLen  uint64
 	NumStripes uint16
 	SubStripes uint16
-	IoAlign    uint64
-	IoWidth    uint64
-	SectorSize uint64
+	IoAlign    uint32
+	IoWidth    uint32
+	SectorSize uint32
 	Stripes    []Stripe
 }
 
-func NewChunkRecord() *ChunkRecord {
-	return &ChunkRecord{}
+func NewChunkRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *ChunkRecord {
+	key := item.Key
+	itemPtr := itemsBuf[item.Offset:]
+	bytereader := bytes.NewReader(itemPtr)
+	chunkItem := new(BtrfsChunk)
+	_ = binary.Read(bytereader, binary.LittleEndian, chunkItem)
+	//	fmt.Printf("chunkItem: %+v\n", chunkItem)
+	this := &ChunkRecord{
+		CacheExtent: CacheExtent{Start: key.Offset, Size: chunkItem.Length},
+		//		List:        list.Element(),
+		Dextents: list.New(),
+		//		BgRec:      nil,
+		Generation: generation,
+		Objectid:   key.Objectid,
+		Type:       key.Type,
+		Offset:     key.Offset,
+		Length:     chunkItem.Length,
+		Owner:      chunkItem.Owner,
+		StripeLen:  chunkItem.StripeLen,
+		TypeFlags:  chunkItem.Type,
+		IoWidth:    chunkItem.IoWidth,
+		IoAlign:    chunkItem.IoAlign,
+		SectorSize: chunkItem.SectorSize,
+		NumStripes: chunkItem.NumStripes,
+		SubStripes: chunkItem.SubStripes,
+		Stripes:    make([]Stripe, chunkItem.NumStripes),
+	}
+	_ = binary.Read(bytereader, binary.LittleEndian, &this.Stripes)
+	return this
+}
+func (x *ChunkRecord) Less(y llrb.Item) bool {
+	return (x.Start + x.Size) <= y.(*ChunkRecord).Start
+}
 
-}
-func (x *ChunkRecord) Less(y llrb.Item ) bool {
-	return false
-}
 type DeviceExtentRecord struct {
 	CacheExtent
 	ChunkList     *list.Element
@@ -239,12 +267,11 @@ type BtrfsChunk struct {
 	Owner      uint64
 	StripeLen  uint64
 	Type       uint64
-	IoAlign    uint64
-	IoWidth    uint64
-	SectorSize uint64
+	IoAlign    uint32
+	IoWidth    uint32
+	SectorSize uint32
 	NumStripes uint16
 	SubStripes uint16
-	Stripe     BtrfsStripe
 }
 type BtrfsFreeSpaceEntry struct {
 	Offset uint64

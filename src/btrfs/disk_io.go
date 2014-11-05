@@ -171,7 +171,7 @@ func csumTreeBlockSize(buf *ExtentBuffer, csumSize uint16,
 	if csum != crc {
 		if verify {
 			if !silent {
-				fmt.Errorf("checksum verify failed on %llu found %08X wanted %08X\n",
+				fmt.Errorf("checksum verify failed on %d found %08X wanted %08X\n",
 					buf.Start,
 					crc,
 					csum)

@@ -13,6 +13,7 @@ const (
 	BTRFS_SIZE              = 4096
 	BTRFS_SUPER_INFO_OFFSET = (64 * 1024)
 	BTRFS_SUPER_INFO_SIZE   = 4096
+	BTRFS_STRIPE_LEN        = (64 * 1024)
 
 	BTRFS_SUPER_MIRROR_MAX   = 3
 	BTRFS_SUPER_MIRROR_SHIFT = 12
@@ -35,6 +36,10 @@ const (
 	BTRFS_BLOCK_GROUP_RAID10   = (1 << 6)
 	BTRFS_BLOCK_GROUP_RAID5    = (1 << 7)
 	BTRFS_BLOCK_GROUP_RAID6    = (1 << 8)
+	BTRFS_ORDERED_RAID         = (BTRFS_BLOCK_GROUP_RAID0 |
+		BTRFS_BLOCK_GROUP_RAID10 |
+		BTRFS_BLOCK_GROUP_RAID5 |
+		BTRFS_BLOCK_GROUP_RAID6)
 	/*
 	 * just in case we somehow lose the roots and are not able to mount,
 	 * we store an array of the roots from previous transactions
@@ -304,7 +309,7 @@ func BtrfsReadItems(fd int, n uint32, bytenr uint64) (bool, []BtrfsItem) {
 
 }
 
-func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblock *[]byte) (bool, error) {
+func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblock *[]byte) (ok bool, err error) {
 	//	csum := uint32(0)
 
 	ret, err := syscall.Pread(fd, *byteblock, int64(bytenr))
@@ -312,12 +317,11 @@ func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblo
 		return false, os.NewSyscallError("pread64", err)
 	}
 	if ret < int(size) {
-		err = errors.New("Pread: not all bytes read")
-		return false, err
+		return false, errors.New("Pread: not all bytes read")
 	}
 	//	fmt.Printf("byteblock: %v\n", byteblock)
-	if bytes.Equal((*byteblock)[32:32+16], fsid) {
-		return true, nil
+	if !bytes.Equal((*byteblock)[32:32+16], fsid) {
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
