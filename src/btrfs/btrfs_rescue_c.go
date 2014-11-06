@@ -2,8 +2,9 @@ package btrfs
 
 import (
 	"container/list"
-	"github.com/petar/GoLLRB/llrb"
 	"sync"
+
+	"github.com/petar/GoLLRB/llrb"
 )
 
 type RecoverControl struct {

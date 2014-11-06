@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/binary"
-	//	"fmt"
+
 	"github.com/petar/GoLLRB/llrb"
 )
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"syscall"
-	//	"unsafe"
 )
 
 var (

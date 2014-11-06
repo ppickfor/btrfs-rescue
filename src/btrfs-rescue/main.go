@@ -4,18 +4,19 @@ import (
 	. "btrfs"
 	"bufio"
 	"bytes"
-	"code.google.com/p/go.net/context"
 	"container/list"
 	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/petar/GoLLRB/llrb"
 	"hash/crc32"
 	"log"
 	"os"
 	"strconv"
 	"sync"
+
+	"code.google.com/p/go.net/context"
+	"github.com/petar/GoLLRB/llrb"
 )
 
 const (
@@ -373,6 +374,7 @@ again:
 				//					fmt.Printf("Mirror:%d\r", tree.Len())
 				//				fmt.Printf("mirror %+v\n", exists.(*ExtentRecord))
 				if exists.Nmirrors < BTRFS_SUPER_MIRROR_MAX {
+					// TODO
 					//					exists.Devices[exists.Nmirrors] = nil
 					exists.Offsets[exists.Nmirrors] = bytenr
 				}
@@ -435,6 +437,7 @@ again:
 			return
 		}
 		if exists.Generation == rec.Generation {
+			// TODO
 			//			int offset = offsetof(struct blockGroupRecord,
 			//					      generation);
 			/*
@@ -514,6 +517,7 @@ again:
 			numStripes := rec.NumStripes
 			if exists.NumStripes != numStripes {
 				fmt.Printf("processChunkItem: same generation but different details %+v\n", rec)
+				// TODO
 				// compare everything from generation to end of the record (varies by num stripes)
 				//int num_stripes = rec->num_stripes;
 				//			int rec_size = btrfs_chunk_record_size(num_stripes);
@@ -650,6 +654,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 // checkChunks: walks the chunk cache and checks the chunks references incrementing the good and bad chunk lists accordingliy
 // if silent is false interates the block groups and device extent chunk oprphans list printing a could not find message
 func checkChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceExtentTree *DeviceExtentTree, good, bad *list.List, silent bool) bool {
+
 	var ret bool
 	chunkCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		chunkRec := i.(*ChunkRecord)
@@ -691,7 +696,6 @@ func checkChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceEx
 func btrfsGetDeviceExtents(chunkObject uint64, orphanDevexts *list.List, ret_list *list.List) uint16 {
 
 	count := uint16(0)
-
 	for element := orphanDevexts.Front(); element != nil; element = element.Next() {
 		i := element.Value
 		devExt := i.(*DeviceExtentRecord)
@@ -699,7 +703,6 @@ func btrfsGetDeviceExtents(chunkObject uint64, orphanDevexts *list.List, ret_lis
 			//			list_move_tail(&devext->chunk_list, ret_list);
 			count++
 		}
-
 	}
 	return count
 }
@@ -967,3 +970,6 @@ func btrfsNextStripeLogicalOffset(chunk *ChunkRecord, logical uint64) uint64 {
 	offset += chunk.StripeLen
 	return offset + chunk.Offset
 }
+
+// TODO
+// Proper support for multiple devices and device scan

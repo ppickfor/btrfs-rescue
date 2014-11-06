@@ -3,11 +3,12 @@ package btrfs
 import (
 	"container/list"
 	"fmt"
-	"github.com/petar/GoLLRB/llrb"
 	"log"
 	"os"
 	"syscall"
 	"unsafe"
+
+	"github.com/petar/GoLLRB/llrb"
 )
 
 func IsSuperBlockAddress(offset uint64) bool {

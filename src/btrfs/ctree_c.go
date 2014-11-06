@@ -1,7 +1,5 @@
 package btrfs
 
-import ()
-
 var (
 	btrfsCsumSizes = []uint16{4, 0}
 )
