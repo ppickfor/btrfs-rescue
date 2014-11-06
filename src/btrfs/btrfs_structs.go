@@ -7,7 +7,7 @@ import (
 	"container/list"
 	"encoding/binary"
 
-	"github.com/petar/GoLLRB/llrb"
+	"github.com/monnand/GoLLRB/llrb"
 )
 
 type Mutex struct {
