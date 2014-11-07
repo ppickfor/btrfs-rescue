@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/petar/GoLLRB/llrb"
+
+	"github.com/monnand/GoLLRB/llrb"
 )
 
 func main() {

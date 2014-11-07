@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/petar/GoLLRB/llrb"
+	"github.com/monnand/GoLLRB/llrb"
 )
 
 func IsSuperBlockAddress(offset uint64) bool {

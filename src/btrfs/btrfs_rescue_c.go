@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/petar/GoLLRB/llrb"
+	"github.com/monnand/GoLLRB/llrb"
 )
 
 type RecoverControl struct {

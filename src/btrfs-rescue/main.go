@@ -16,7 +16,7 @@ import (
 	"sync"
 
 	"code.google.com/p/go.net/context"
-	"github.com/petar/GoLLRB/llrb"
+	"github.com/monnand/GoLLRB/llrb"
 )
 
 const (
