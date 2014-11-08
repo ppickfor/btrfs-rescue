@@ -23,7 +23,7 @@ func IsSuperBlockAddress(offset uint64) bool {
 }
 func NewRecoverControl(verbose bool, yes bool) *RecoverControl {
 
-	return &RecoverControl{
+	rc := &RecoverControl{
 		Chunk:   llrb.New(),
 		EbCache: llrb.New(),
 		Bg: BlockGroupTree{Tree: llrb.New(),
@@ -33,9 +33,20 @@ func NewRecoverControl(verbose bool, yes bool) *RecoverControl {
 			ChunkOrphans:  list.New(),
 			DeviceOrphans: list.New(),
 		},
-		Verbose: verbose,
-		Yes:     yes,
+		Verbose:          verbose,
+		Yes:              yes,
+		GoodChunks:       list.New(),
+		BadChunks:        list.New(),
+		UnrepairedChunks: list.New(),
+		FsDevices: &BtrfsFsDevices{
+			Devices: list.New(),
+		},
 	}
+	rc.FsDevices.Devices.PushBack(&BtrfsDevice{
+		Devid: 1,
+	},
+	)
+	return rc
 	//	pthreadMutexInit(&rc->rcLock, NULL);
 }
 
