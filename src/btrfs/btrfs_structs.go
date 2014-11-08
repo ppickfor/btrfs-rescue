@@ -1006,7 +1006,7 @@ type BtrfsFsDevices struct {
 	LatestBdev  int32
 	LowestBdev  int32
 	Devices     *list.List
-	List        *list.List
+	List        *list.Element
 	Seeding     int32
 	Seed        *BtrfsFsDevices
 }
