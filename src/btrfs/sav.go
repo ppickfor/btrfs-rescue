@@ -1178,3 +1178,190 @@ import ()
 //	}
 //}
 //
+//func extractMetadataRecord(rc *RecoverControl, leaf *ExtentBuffer) bool {
+//	var (
+//		//	struct btrfsKey key;
+//		ret = false
+//	//	int i;
+//	//	u32 nritems;
+//	//
+//	)
+//	nritems := uint64((*BtrfsHeader)(unsafe.Pointer(&leaf.Data)).Nritems)
+//	for i := uint64(0); i < nritems; i++ {
+//		//		btrfsItemKeyToCpu(leaf, &key, i);
+//		//		switch (key.type) {
+//		//		case BTRFS_BLOCK_GROUP_ITEM_KEY:
+//		//			pthreadMutexLock(&rc->rcLock);
+//		//			ret = processBlockGroupItem(&rc->bg, leaf, &key, i);
+//		//			pthreadMutexUnlock(&rc->rcLock);
+//		//			break;
+//		//		case BTRFS_CHUNK_ITEM_KEY:
+//		//			pthreadMutexLock(&rc->rcLock);
+//		//			ret = processChunkItem(&rc->chunk, leaf, &key, i);
+//		//			pthreadMutexUnlock(&rc->rcLock);
+//		//			break;
+//		//		case BTRFS_DEV_EXTENT_KEY:
+//		//			pthreadMutexLock(&rc->rcLock);
+//		//			ret = processDeviceExtentItem(&rc->devext, leaf,
+//		//							 &key, i);
+//		//			pthreadMutexUnlock(&rc->rcLock);
+//		//			break;
+//		//		}
+//		//		if (ret)
+//		//			break;
+//	}
+//	return ret
+//}
+//func scanOneDevice(devScan *DeviceScan) bool {
+//	var (
+//		buf    *ExtentBuffer
+//		bytenr uint64
+//		ret    bool = false
+//		//struct deviceScan *devScan = (struct deviceScan *)devScanStruct;
+//		rc *RecoverControl = devScan.Rc
+//		//		device *BtrfsDevice    = devScan.Dev
+//		fd int = devScan.Fd
+//		//		oldtype int
+//		h *BtrfsHeader
+//	)
+//	buf = new(ExtentBuffer)
+//	buf.Len = uint64(rc.Leafsize)
+//	buf.Data = make([]byte, rc.Leafsize)
+//loop:
+//	for bytenr = 0; ; bytenr += uint64(rc.Sectorsize) {
+//		ret = false
+//		if IsSuperBlockAddress(bytenr) {
+//			bytenr += uint64(rc.Sectorsize)
+//		}
+//		n, err := syscall.Pread(fd, buf.Data, int64(bytenr))
+//		if err != nil {
+//			log.Fatalln(os.NewSyscallError("pread64", err))
+//		}
+//		if n < int(rc.Leafsize) {
+//			break loop
+//		}
+//		h = (*BtrfsHeader)(unsafe.Pointer(&buf.Data))
+//		if rc.FsDevices.Fsid != h.Fsid || verifyTreeBlockCsumSilent(buf, uint16(rc.CsumSize)) {
+//			continue loop
+//		}
+//		rc.RcLock.Lock()
+//		//		ret = processExtentBuffer(&rc.EbCache, buf, device, bytenr)
+//		rc.RcLock.Unlock()
+//		if !ret {
+//			break loop
+//		}
+//		if h.Level != 0 {
+//			switch h.Owner {
+//			case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
+//				/* different tree use different generation */
+//				if h.Generation > rc.Generation {
+//					continue loop
+//				}
+//				if ret = extractMetadataRecord(rc, buf); !ret {
+//					break loop
+//				}
+//			case BTRFS_CHUNK_TREE_OBJECTID:
+//				if h.Generation > rc.ChunkRootGeneration {
+//					continue loop
+//				}
+//				if ret = extractMetadataRecord(rc, buf); !ret {
+//					break loop
+//				}
+//			}
+//		}
+//	}
+//
+//	//	close(fd);
+//	//	free(buf);
+//	return ret
+//}
+
+//func processExtentBuffer(ebCache *CacheTree,
+//	eb *ExtentBuffer,
+//	device *BtrfsDevice, offset uint64) bool {
+//	struct extentRecord *rec;
+//	struct extentRecord *exist;
+//	struct cacheExtent *cache;
+//	int ret = 0;
+//
+//	rec = btrfsNewExtentRecord(eb);
+//	if (!rec->cache.size)
+//		goto freeOut;
+//again:
+//	cache = lookupCacheExtent(ebCache,
+//				    rec->cache.start,
+//				    rec->cache.size);
+//	if (cache) {
+//		exist = containerOf(cache, struct extentRecord, cache);
+//
+//		if (exist->generation > rec->generation)
+//			goto freeOut;
+//		if (exist->generation == rec->generation) {
+//			if (exist->cache.start != rec->cache.start ||
+//			    exist->cache.size != rec->cache.size ||
+//			    memcmp(exist->csum, rec->csum, BTRFS_CSUM_SIZE)) {
+//				ret = -EEXIST;
+//			} else {
+//				BUG_ON(exist->nmirrors >= BTRFS_MAX_MIRRORS);
+//				exist->devices[exist->nmirrors] = device;
+//				exist->offsets[exist->nmirrors] = offset;
+//				exist->nmirrors++;
+//			}
+//			goto freeOut;
+//		}
+//		removeCacheExtent(ebCache, cache);
+//		free(exist);
+//		goto again;
+//	}
+//
+//	rec->devices[0] = device;
+//	rec->offsets[0] = offset;
+//	rec->nmirrors++;
+//	ret = insertCacheExtent(ebCache, &rec->cache);
+//	BUG_ON(ret);
+//out:
+//	return ret;
+//freeOut:
+//	free(rec);
+//	goto out;
+//	return false
+//}
+// read header struct from fd at bytenr
+//func BtrfsReadHeader(fd int, header *BtrfsHeader, bytenr uint64) bool {
+//
+//	var size = binary.Size(header)
+//	var byteheader = make([]byte, size)
+//	var bytebr = bytes.NewReader(byteheader)
+//
+//	ret, _ := syscall.Pread(fd, byteheader, int64(bytenr))
+//	if ret < size {
+//		return false
+//	}
+//	_ = binary.Read(bytebr, binary.LittleEndian, header)
+//
+//	return true
+//
+//}
+//
+//// read items structs from fd at bytenr
+//func BtrfsReadItems(fd int, n uint32, bytenr uint64) (bool, []BtrfsItem) {
+//	header := new(BtrfsHeader)
+//	item := new(BtrfsItem)
+//	myitems := make([]BtrfsItem, n)
+//	var hsize = binary.Size(header)
+//	var isize = binary.Size(item)
+//	var byteitems = make([]byte, uint32(isize)*n)
+//	var bytebr = bytes.NewReader(byteitems)
+//
+//	ret, _ := syscall.Pread(fd, byteitems, int64(bytenr+uint64(hsize)))
+//	if ret < isize {
+//		return false, nil
+//	}
+//	err := binary.Read(bytebr, binary.LittleEndian, myitems)
+//	if err != nil {
+//		return false, nil
+//	} else {
+//		return true, myitems
+//	}
+//
+//}
