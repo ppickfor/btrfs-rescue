@@ -636,6 +636,19 @@ type BtrfsRoot struct {
 	DirtyList      *list.List
 	RbNode         RbNode
 }
+
+func NewFakeBtrfsRoot(rc *RecoverControl) *BtrfsRoot {
+	return &BtrfsRoot{
+		FsInfo: &BtrfsFsInfo{
+			FsDevices: rc.FsDevices,
+			MappingTree: BtrfsMappingTree{
+				Tree: llrb.New(),
+			},
+		},
+	}
+
+}
+
 type ExtentState struct {
 	Node     CacheExtent
 	Start    uint64
@@ -1087,6 +1100,7 @@ type RecoverControl struct {
 	Fd                  int
 	Fsid                [16]uint8
 }
+
 func NewRecoverControl(verbose bool, yes bool) *RecoverControl {
 
 	rc := &RecoverControl{

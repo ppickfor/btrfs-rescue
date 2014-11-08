@@ -170,7 +170,7 @@ func buildDeviceMapByChunkRecord(root *BtrfsRoot, chunk *ChunkRecord) {
 	mapTree.Tree.InsertNoReplace(Map)
 }
 
-func buildDeviceMapsByChunkRecords(rc *RecoverControl, root *BtrfsRoot) {
+func BuildDeviceMapsByChunkRecords(rc *RecoverControl, root *BtrfsRoot) {
 	for i := rc.GoodChunks.Front(); i != nil && i.Value != nil; i = i.Next() {
 		chunk := i.Value.(*ChunkRecord)
 		buildDeviceMapByChunkRecord(root, chunk)

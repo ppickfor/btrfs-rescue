@@ -77,6 +77,7 @@ func main() {
 	}
 	rc := NewRecoverControl(true, false)
 	RecoverPrepare(rc, *deviceFlag)
+	root := NewFakeBtrfsRoot(rc)
 	bytenrChan := make(chan uint64, 20)
 	csumBlockChan := make(chan treeBlock, 20)
 	headerBlockchan := make(chan treeBlock, 20)
@@ -138,6 +139,7 @@ func main() {
 	CheckChunks(rc.Chunk, &rc.Bg, &rc.Devext, rc.GoodChunks, rc.BadChunks, false)
 
 	BtrfsRecoverChunks(rc)
+	BuildDeviceMapsByChunkRecords(rc, root)
 
 	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
 	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
