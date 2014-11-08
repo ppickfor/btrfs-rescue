@@ -3,8 +3,10 @@ package btrfs
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
+	"os"
 	"syscall"
 )
 
@@ -234,4 +236,23 @@ func checkSuper(fd int, bytenr uint64, sb *BtrfsSuperBlock) bool {
 	fmt.Printf("Crc match calculated %08x have %08x\n", crc, csum)
 	return true
 
+}
+
+// BtrfsReadTreeblock: read a tree block from the device fd at byte bytenr of size size into byteblock slice checking the fsid and read errors
+// return a bool and an error if true the block can be used if false a nill error indicates a fsid mis match
+func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblock *[]byte) (ok bool, err error) {
+	//	csum := uint32(0)
+
+	ret, err := syscall.Pread(fd, *byteblock, int64(bytenr))
+	if err != nil {
+		return false, os.NewSyscallError("pread64", err)
+	}
+	if ret < int(size) {
+		return false, errors.New("Pread: not all bytes read")
+	}
+	//	fmt.Printf("byteblock: %v\n", byteblock)
+	if !bytes.Equal((*byteblock)[32:32+16], fsid) {
+		return false, nil
+	}
+	return true, nil
 }
