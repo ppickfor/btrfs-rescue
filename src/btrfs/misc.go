@@ -1,5 +1,9 @@
 package btrfs
 
+import (
+	"math"
+)
+
 const (
 	BTRFS_MAX_MIRRORS       = 3
 	BTRFS_SIZE              = 4096
@@ -75,44 +79,44 @@ const (
 	BTRFS_UUID_TREE_OBJECTID = 9
 
 	/* for storing balance parameters in the root tree */
-	BTRFS_BALANCE_OBJECTID = -4
+	BTRFS_BALANCE_OBJECTID uint64 = -4 & math.MaxUint64
 
 	/* oprhan objectid for tracking unlinked/truncated files */
-	BTRFS_ORPHAN_OBJECTID = -5
+	BTRFS_ORPHAN_OBJECTID uint64 = -5 & math.MaxUint64
 
 	/* does write ahead logging to speed up fsyncs */
-	BTRFS_TREE_LOG_OBJECTID       = -6
-	BTRFS_TREE_LOG_FIXUP_OBJECTID = -7
+	BTRFS_TREE_LOG_OBJECTID       uint64 = -6 & math.MaxUint64
+	BTRFS_TREE_LOG_FIXUP_OBJECTID uint64 = -7 & math.MaxUint64
 
 	/* space balancing */
-	BTRFS_TREE_RELOC_OBJECTID      = -8
-	BTRFS_DATA_RELOC_TREE_OBJECTID = -9
+	BTRFS_TREE_RELOC_OBJECTID      uint64 = -8 & math.MaxUint64
+	BTRFS_DATA_RELOC_TREE_OBJECTID uint64 = -9 & math.MaxUint64
 
 	/*
 	 * extent checksums all have this objectid
 	 * this allows them to share the logging tree
 	 * for fsyncs
 	 */
-	BTRFS_EXTENT_CSUM_OBJECTID = -10
+	BTRFS_EXTENT_CSUM_OBJECTID uint64 = -10 & math.MaxUint64
 
 	/* For storing free space cache */
-	BTRFS_FREE_SPACE_OBJECTID = -11
+	BTRFS_FREE_SPACE_OBJECTID uint64 = -11 & math.MaxUint64
 
 	/*
 	 * The inode number assigned to the special inode for sotring
 	 * free ino cache
 	 */
-	BTRFS_FREE_INO_OBJECTID = -12
+	BTRFS_FREE_INO_OBJECTID uint64 = -12 & math.MaxUint64
 
 	/* dummy objectid represents multiple objectids */
-	BTRFS_MULTIPLE_OBJECTIDS = -255
+	BTRFS_MULTIPLE_OBJECTIDS uint64 = -255 & math.MaxUint64
 
 	/*
 	 * All files have objectids in this range.
 	 */
-	BTRFS_FIRST_FREE_OBJECTID       = 256
-	BTRFS_LAST_FREE_OBJECTID        = -256
-	BTRFS_FIRST_CHUNK_TREE_OBJECTID = 256
+	BTRFS_FIRST_FREE_OBJECTID              = 256
+	BTRFS_LAST_FREE_OBJECTID        uint64 = -256 & math.MaxUint64
+	BTRFS_FIRST_CHUNK_TREE_OBJECTID        = 256
 
 	/*
 	 * the device items go into the chunk tree.  The key is in the form
