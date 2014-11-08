@@ -1,6 +1,9 @@
 package btrfs
 
-import ()
+import (
+	"bytes"
+	"container/list"
+	)
 
 func btrfsScanOneDevice(
 	fd int,
@@ -118,4 +121,58 @@ func deviceListAdd(path string,
 	//	}
 	//	*fsDevicesRet = fsDevices;
 	return 0
+}
+
+func _FindDevice(devices *list.List, devId uint64, uuid []byte) *BtrfsDevice {
+	for i := devices.Front(); i != nil && i.Value != nil; i = i.Next() {
+		device := i.Value.(*BtrfsDevice)
+		if device.Devid == devId && bytes.Equal(device.Uuid[:], uuid) {
+			return device
+		}
+	}
+	return nil
+}
+func btrfsFindDevice(root *BtrfsRoot, devId uint64, uuid []byte, fsId *[]byte) *BtrfsDevice {
+	curDevices := root.FsInfo.FsDevices
+	for curDevices != nil {
+		if fsId == nil || bytes.Equal(curDevices.Fsid[:], *fsId) {
+			device := _FindDevice(curDevices.Devices, devId, uuid)
+			return device
+
+		}
+		curDevices = curDevices.Seed
+	}
+	return nil
+}
+func buildDeviceMapByChunkRecord(root *BtrfsRoot, chunk *ChunkRecord) {
+
+	mapTree := &root.FsInfo.MappingTree
+	numStripes := chunk.NumStripes
+	Map := &MapLookup{
+		CacheExtent: CacheExtent{
+			Start: chunk.Offset,
+			Size:  chunk.Length,
+		},
+		NumStripes: int32(numStripes),
+		IoWidth:    int32(chunk.IoWidth),
+		IoAlign:    int32(chunk.IoAlign),
+		SectorSize: int32(chunk.SectorSize),
+		StripeLen:  int32(chunk.StripeLen),
+		Type:       chunk.TypeFlags,
+		SubStripes: int32(chunk.SubStripes),
+	}
+	for i, stripe := range chunk.Stripes {
+		devId := stripe.Devid
+		uuid := stripe.Uuid
+		Map.Stripes[i].Physical = stripe.Offset
+		Map.Stripes[i].Dev = btrfsFindDevice(root, devId, uuid[:], nil)
+	}
+	mapTree.Tree.InsertNoReplace(Map)
+}
+
+func buildDeviceMapsByChunkRecords(rc *RecoverControl, root *BtrfsRoot) {
+	for i := rc.GoodChunks.Front(); i != nil && i.Value != nil; i = i.Next() {
+		chunk := i.Value.(*ChunkRecord)
+		buildDeviceMapByChunkRecord(root, chunk)
+	}
 }
