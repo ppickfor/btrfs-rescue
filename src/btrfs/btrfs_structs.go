@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/binary"
+	"sync"
 
 	"github.com/monnand/GoLLRB/llrb"
 )
@@ -1020,7 +1021,7 @@ type BtrfsMultiBio struct {
 	Stripes    [0]BtrfsBioStripe
 }
 type MapLookup struct {
-	Ce         CacheExtent
+	CacheExtent
 	Type       uint64
 	IoAlign    int32
 	IoWidth    int32
@@ -1028,8 +1029,13 @@ type MapLookup struct {
 	SectorSize int32
 	NumStripes int32
 	SubStripes int32
-	Stripes    [0]BtrfsBioStripe
+	Stripes    []BtrfsBioStripe
 }
+
+func (x *MapLookup) Less(y llrb.Item) bool {
+	return (x.Start + x.Size) <= y.(*MapLookup).Start
+}
+
 type BtrfsExtentOps struct {
 	AllocExtent *[0]byte
 	FreeExtent  *[0]byte
@@ -1059,4 +1065,53 @@ func NewExtentRecord(header *BtrfsHeader, rc *RecoverControl) *ExtentRecord {
 
 func (x *ExtentRecord) Less(y llrb.Item) bool {
 	return (x.Start + x.Size) <= y.(*ExtentRecord).Start
+}
+
+type RecoverControl struct {
+	Verbose             bool
+	Yes                 bool
+	CsumSize            uint16
+	Sectorsize          uint32
+	Leafsize            uint32
+	Generation          uint64
+	ChunkRootGeneration uint64
+	FsDevices           *BtrfsFsDevices
+	Chunk               *llrb.LLRB
+	Bg                  BlockGroupTree
+	Devext              DeviceExtentTree
+	EbCache             *llrb.LLRB
+	GoodChunks          *list.List
+	BadChunks           *list.List
+	UnrepairedChunks    *list.List
+	RcLock              sync.Mutex
+	Fd                  int
+	Fsid                [16]uint8
+}
+func NewRecoverControl(verbose bool, yes bool) *RecoverControl {
+
+	rc := &RecoverControl{
+		Chunk:   llrb.New(),
+		EbCache: llrb.New(),
+		Bg: BlockGroupTree{Tree: llrb.New(),
+			Block_Groups: list.New(),
+		},
+		Devext: DeviceExtentTree{Tree: llrb.New(),
+			ChunkOrphans:  list.New(),
+			DeviceOrphans: list.New(),
+		},
+		Verbose:          verbose,
+		Yes:              yes,
+		GoodChunks:       list.New(),
+		BadChunks:        list.New(),
+		UnrepairedChunks: list.New(),
+		FsDevices: &BtrfsFsDevices{
+			Devices: list.New(),
+		},
+	}
+	rc.FsDevices.Devices.PushBack(&BtrfsDevice{
+		Devid: 1,
+	},
+	)
+	return rc
+	//	pthreadMutexInit(&rc->rcLock, NULL);
 }
