@@ -431,7 +431,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 						length)
 					ret = false
 				} else {
-					devExtentRec.ChunkList = chunkRec.Dextents.PushBack(devExtentRec.ChunkList)
+					devExtentRec.ChunkList = chunkRec.Dextents.PushBack(devExtentRec)
 					//									list_move(&dev_extent_rec->chunk_list,
 					//					  &chunk_rec->dextents);
 				}
@@ -542,7 +542,7 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 
 		if btrfsVerifyDeviceExtents(bg, devExts, nstripes) {
 			continue
-			rc.BadChunks.PushBack(chunk.List)
+			chunk.List = rc.BadChunks.PushBack(chunk)
 		}
 		chunk.NumStripes = nstripes
 		chunk.Stripes = make([]Stripe, nstripes)
@@ -550,11 +550,11 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 		err, ret = btrfsRebuildChunkStripes(rc, chunk)
 		switch {
 		case err != nil:
-			rc.UnrepairedChunks.PushBack(chunk.List)
+			chunk.List = rc.UnrepairedChunks.PushBack(chunk)
 		case ret:
-			rc.GoodChunks.PushBack(chunk.List)
+			chunk.List = rc.GoodChunks.PushBack(chunk)
 		case !ret:
-			rc.BadChunks.PushBack(chunk.List)
+			chunk.List = rc.BadChunks.PushBack(chunk)
 		}
 	}
 	/*
@@ -601,7 +601,7 @@ again:
 			chunk.Stripes[index].Uuid = er.Devices[mirror].Uuid
 			index++
 			//			list_move(&devext->chunk_list, &chunk->dextents);
-			devExt.ChunkList = chunk.Dextents.PushBack(devExt.ChunkList)
+			devExt.ChunkList = chunk.Dextents.PushBack(devExt)
 		}
 	}
 next:
@@ -633,7 +633,7 @@ noExtentRecord:
 		//		list_move(&devext->chunk_list, &chunk->dextents);
 		if i := devExts.Front(); i != nil {
 			devExt := i.Value.(*DeviceExtentRecord)
-			devExt.ChunkList = chunk.Dextents.PushBack(devExt.ChunkList)
+			devExt.ChunkList = chunk.Dextents.PushBack(devExt)
 			chunk.Stripes[index].Devid = devExt.Objectid
 			chunk.Stripes[index].Offset = devExt.Offset
 			device := btrfsFindDeviceByDevid(rc.FsDevices, devExt.Objectid, 0)
