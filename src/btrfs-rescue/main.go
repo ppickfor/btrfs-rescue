@@ -140,17 +140,22 @@ func main() {
 
 	BtrfsRecoverChunks(rc)
 	BuildDeviceMapsByChunkRecords(rc, root)
+	fmt.Printf("Bad Chunks: %d\n", rc.BadChunks.Len())
+	fmt.Printf("Good Chunks: %d\n", rc.GoodChunks.Len())
+	fmt.Printf("Urepaired Chunks: %d\n", rc.UnrepairedChunks.Len())
+	fmt.Printf("Device Orphans: %d\n", rc.Devext.DeviceOrphans.Len())
+	fmt.Printf("Chunk Orphans: %d\n", rc.Devext.ChunkOrphans.Len())
 
-	fmt.Printf("\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len() )
+	fmt.Printf("\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len())
 	root.FsInfo.MappingTree.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%+v\n", i)
 		return true
 	})
-//	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
-//	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-//		fmt.Printf("%+v\n", i)
-//		return true
-//	})
+	//	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
+	//	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+	//		fmt.Printf("%+v\n", i)
+	//		return true
+	//	})
 	fmt.Printf("\nAll %d Block Groups\n", rc.Bg.Tree.Len())
 	rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%+v\n", i)
@@ -329,17 +334,17 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					switch owner {
 					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
 						/* different tree use different generation */
-						if generation <= rc.Generation {
+//						if generation <= rc.Generation {
 							items := make([]BtrfsItem, nritems)
 							_ = binary.Read(bytereader, binary.LittleEndian, items)
 							ExtractMetadataRecord(rc, generation, items, infoByteBlock)
-						}
+//						}
 					case BTRFS_CHUNK_TREE_OBJECTID:
-						if generation <= rc.ChunkRootGeneration {
+//						if generation <= rc.ChunkRootGeneration {
 							items := make([]BtrfsItem, nritems)
 							_ = binary.Read(bytereader, binary.LittleEndian, items)
 							ExtractMetadataRecord(rc, generation, items, infoByteBlock)
-						}
+//						}
 					}
 				}
 			} else {
