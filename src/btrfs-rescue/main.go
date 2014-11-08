@@ -141,11 +141,16 @@ func main() {
 	BtrfsRecoverChunks(rc)
 	BuildDeviceMapsByChunkRecords(rc, root)
 
-	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
-	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+	fmt.Printf("\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len() )
+	root.FsInfo.MappingTree.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%+v\n", i)
 		return true
 	})
+//	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
+//	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+//		fmt.Printf("%+v\n", i)
+//		return true
+//	})
 	fmt.Printf("\nAll %d Block Groups\n", rc.Bg.Tree.Len())
 	rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		fmt.Printf("%+v\n", i)
