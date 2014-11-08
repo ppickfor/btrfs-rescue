@@ -1,13 +1,5 @@
 package btrfs
 
-import (
-	"bytes"
-	"encoding/binary"
-	"errors"
-	"os"
-	"syscall"
-)
-
 const (
 	BTRFS_MAX_MIRRORS       = 3
 	BTRFS_SIZE              = 4096
@@ -268,60 +260,3 @@ type (
 	Le32 uint32
 	Le64 uint64
 )
-
-// read header struct from fd at bytenr
-func BtrfsReadHeader(fd int, header *BtrfsHeader, bytenr uint64) bool {
-
-	var size = binary.Size(header)
-	var byteheader = make([]byte, size)
-	var bytebr = bytes.NewReader(byteheader)
-
-	ret, _ := syscall.Pread(fd, byteheader, int64(bytenr))
-	if ret < size {
-		return false
-	}
-	_ = binary.Read(bytebr, binary.LittleEndian, header)
-
-	return true
-
-}
-
-// read items structs from fd at bytenr
-func BtrfsReadItems(fd int, n uint32, bytenr uint64) (bool, []BtrfsItem) {
-	header := new(BtrfsHeader)
-	item := new(BtrfsItem)
-	myitems := make([]BtrfsItem, n)
-	var hsize = binary.Size(header)
-	var isize = binary.Size(item)
-	var byteitems = make([]byte, uint32(isize)*n)
-	var bytebr = bytes.NewReader(byteitems)
-
-	ret, _ := syscall.Pread(fd, byteitems, int64(bytenr+uint64(hsize)))
-	if ret < isize {
-		return false, nil
-	}
-	err := binary.Read(bytebr, binary.LittleEndian, myitems)
-	if err != nil {
-		return false, nil
-	} else {
-		return true, myitems
-	}
-
-}
-
-func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblock *[]byte) (ok bool, err error) {
-	//	csum := uint32(0)
-
-	ret, err := syscall.Pread(fd, *byteblock, int64(bytenr))
-	if err != nil {
-		return false, os.NewSyscallError("pread64", err)
-	}
-	if ret < int(size) {
-		return false, errors.New("Pread: not all bytes read")
-	}
-	//	fmt.Printf("byteblock: %v\n", byteblock)
-	if !bytes.Equal((*byteblock)[32:32+16], fsid) {
-		return false, nil
-	}
-	return true, nil
-}
