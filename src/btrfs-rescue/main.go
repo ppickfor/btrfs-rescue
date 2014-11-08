@@ -540,7 +540,7 @@ again:
 	chunkCache.InsertNoReplace(rec)
 }
 
-// checkChunks: calculates the length of a single stripe based on the type of block group a total length and the number of stripes.
+// calcStripeLength: calculates the length of a single stripe based on the type of block group a total length and the number of stripes.
 func calcStripeLength(typeFlags, length uint64, numStripes uint16) uint64 {
 	var stripeSize uint64
 	switch {
@@ -660,8 +660,8 @@ func checkChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceEx
 	chunkCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
 		chunkRec := i.(*ChunkRecord)
 		err := checkChunkRefs(chunkRec, blockGroupTree, deviceExtentTree, silent)
-		if err {
-			ret = err
+		if !err {
+			ret = false
 			if bad != nil {
 				chunkRec.List = bad.PushBack(chunkRec)
 			}
@@ -693,22 +693,79 @@ func checkChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceEx
 	return ret
 }
 
-//btrfsGetDeviceExtents: counts the chunks in the orphan device extents list that match theis chunk and returns a list of them
-func btrfsGetDeviceExtents(chunkObject uint64, orphanDevexts *list.List, ret_list *list.List) uint16 {
+//btrfsGetDeviceExtents: counts the chunks in the orphan device extents list that match this chunk and returns a list of them
+func btrfsGetDeviceExtents(chunkObject uint64, orphanDevexts *list.List, retList *list.List) uint16 {
 
 	count := uint16(0)
 	for element := orphanDevexts.Front(); element != nil; element = element.Next() {
 		i := element.Value
 		devExt := i.(*DeviceExtentRecord)
 		if devExt.ChunkOffset == chunkObject {
-			//			list_move_tail(&devext->chunk_list, ret_list);
+			retList.PushBack(devExt.ChunkList.Value)
+			//			list_move_tail(&devext->chunk_list, retList);
 			count++
 		}
 	}
 	return count
 }
 
-// calcSubNstripes caqclulates the number of sub stripes as 2 if this is a rad10 block 1 otherwise
+// btrfsRecoverChunks create the chunks by block group
+func btrfsRecoverChunks(rc *RecoverControl) bool {
+	ret := true
+	devExts := list.New()
+	for element := rc.Bg.Block_Groups.Front(); element != nil; element = element.Next() {
+		i := element.Value
+		bg := i.(*BlockGroupRecord)
+		nstripes := btrfsGetDeviceExtents(bg.Objectid, rc.Devext.ChunkOrphans, devExts)
+		chunk := &ChunkRecord{
+			Dextents:    list.New(),
+			BgRec:       bg,
+			CacheExtent: CacheExtent{Start: bg.Objectid, Size: bg.Offset},
+			Objectid:    BTRFS_FIRST_CHUNK_TREE_OBJECTID,
+			Type:        BTRFS_CHUNK_ITEM_KEY,
+			Offset:      bg.Objectid,
+			Generation:  bg.Generation,
+			Owner:       BTRFS_CHUNK_TREE_OBJECTID,
+			StripeLen:   BTRFS_STRIPE_LEN,
+			TypeFlags:   bg.Flags,
+			IoWidth:     BTRFS_STRIPE_LEN,
+			IoAlign:     BTRFS_STRIPE_LEN,
+			SectorSize:  rc.Sectorsize,
+			SubStripes:  calcSubNstripes(bg.Flags),
+		}
+		rc.Chunk.InsertNoReplace(chunk)
+		if nstripes == 0 {
+			chunk.List = rc.BadChunks.PushBack(chunk)
+			continue
+		}
+		chunk.Dextents.PushBackList(devExts)
+
+		if btrfsVerifyDeviceExtents(bg, devExts, nstripes) {
+			continue
+			rc.BadChunks.PushBack(chunk.List)
+		}
+		chunk.NumStripes = nstripes
+		chunk.Stripes = make([]Stripe,nstripes)
+		var err error
+		err, ret = btrfsRebuildChunkStripes(rc, chunk)
+		switch {
+		case err != nil:
+			rc.UnrepairedChunks.PushBack(chunk.List)
+		case ret:
+			rc.GoodChunks.PushBack(chunk.List)
+		case !ret:
+			rc.BadChunks.PushBack(chunk.List)
+		}
+	}
+	/*
+	 * Don't worry about the lost orphan device extents, they don't
+	 * have its chunk and block group, they must be the old ones that
+	 * we have dropped.
+	 */
+	return ret
+}
+
+// calcSubNstripes caculates the number of sub stripes as 2 if this is a rad10 block 1 otherwise
 func calcSubNstripes(Type uint64) uint16 {
 	if Type&BTRFS_BLOCK_GROUP_RAID10 == 0 {
 		return 2
@@ -822,6 +879,8 @@ func btrfsRebuildChunkStripes(rc *RecoverControl, chunk *ChunkRecord) (error, bo
 	}
 	return btrfsRebuildUnorderedChunkStripes(rc, chunk)
 }
+
+// btrfsVerifyDeviceExtents: verifies there is a device extent of the corrrect lenghth for each stripe of the block group based on block group Flags
 func btrfsVerifyDeviceExtents(bg *BlockGroupRecord, devExts *list.List, nDevExts uint16) bool {
 	var (
 		stripeLength       uint64
@@ -841,86 +900,35 @@ func btrfsVerifyDeviceExtents(bg *BlockGroupRecord, devExts *list.List, nDevExts
 	return true
 }
 
-// btrfsRecoverChunks create the chunks by block group
-func btrfsRecoverChunks(rc *RecoverControl) bool {
-	ret := true
-	devExts := list.New()
-	for element := rc.Bg.Block_Groups.Front(); element != nil; element = element.Next() {
-		i := element.Value
-		bg := i.(*BlockGroupRecord)
-		nstripes := btrfsGetDeviceExtents(bg.Objectid, rc.Devext.ChunkOrphans, devExts)
-		chunk := &ChunkRecord{
-			Dextents:    list.New(),
-			BgRec:       bg,
-			CacheExtent: CacheExtent{Start: bg.Objectid, Size: bg.Offset},
-			Objectid:    BTRFS_FIRST_CHUNK_TREE_OBJECTID,
-			Type:        BTRFS_CHUNK_ITEM_KEY,
-			Offset:      bg.Objectid,
-			Generation:  bg.Generation,
-			Owner:       BTRFS_CHUNK_TREE_OBJECTID,
-			StripeLen:   BTRFS_STRIPE_LEN,
-			TypeFlags:   bg.Flags,
-			IoWidth:     BTRFS_STRIPE_LEN,
-			IoAlign:     BTRFS_STRIPE_LEN,
-			SectorSize:  rc.Sectorsize,
-			SubStripes:  calcSubNstripes(bg.Flags),
-		}
-		rc.Chunk.InsertNoReplace(chunk)
-		if nstripes == 0 {
-			chunk.List = rc.BadChunks.PushBack(chunk)
-			continue
-		}
-		chunk.Dextents.PushBackList(devExts)
-
-		if btrfsVerifyDeviceExtents(bg, devExts, nstripes) {
-			continue
-			rc.BadChunks.PushBack(chunk.List)
-		}
-		chunk.NumStripes = nstripes
-		var err error
-		err, ret = btrfsRebuildChunkStripes(rc, chunk)
-		switch {
-		case err != nil:
-			rc.UnrepairedChunks.PushBack(chunk.List)
-		case ret:
-			rc.GoodChunks.PushBack(chunk.List)
-		case !ret:
-			rc.BadChunks.PushBack(chunk.List)
-		}
-	}
-	/*
-	 * Don't worry about the lost orphan device extents, they don't
-	 * have its chunk and block group, they must be the old ones that
-	 * we have dropped.
-	 */
-	return ret
-}
-
 func btrfsCalcStripeIndex(chunk *ChunkRecord, logical uint64) uint16 {
 	var (
-		offset                         = logical - chunk.Offset
-		stripeNr, ntDataStripes, index uint16
+		offset                                     = logical - chunk.Offset
+		numStripes, ntDataStripes, stripeNr, index uint64
 	)
 
-	stripeNr = uint16(offset / chunk.StripeLen)
+	stripeNr = uint64(offset / chunk.StripeLen)
 	switch {
 	case chunk.TypeFlags&BTRFS_BLOCK_GROUP_RAID0 != 0:
-		index = stripeNr % chunk.NumStripes
+		numStripes = uint64(chunk.NumStripes)
+		index = stripeNr % numStripes
 	case chunk.TypeFlags&BTRFS_BLOCK_GROUP_RAID10 != 0:
-		index = stripeNr % (chunk.NumStripes / chunk.SubStripes)
-		index *= chunk.SubStripes
+		subStripes := uint64(chunk.SubStripes)
+		index = stripeNr % numStripes / subStripes
+		index *= subStripes
 	case chunk.TypeFlags&BTRFS_BLOCK_GROUP_RAID5 != 0:
-		ntDataStripes = chunk.NumStripes - 1
+		numStripes = uint64(chunk.NumStripes)
+		ntDataStripes = numStripes - 1
 		index = stripeNr % ntDataStripes
 		stripeNr /= ntDataStripes
-		index = (index + stripeNr) % chunk.NumStripes
+		index = (index + stripeNr) % numStripes
 	case chunk.TypeFlags&BTRFS_BLOCK_GROUP_RAID6 != 0:
-		ntDataStripes = chunk.NumStripes - 2
+		numStripes = uint64(chunk.NumStripes)
+		ntDataStripes = numStripes - 2
 		index = stripeNr % ntDataStripes
 		stripeNr /= ntDataStripes
-		index = (index + stripeNr) % chunk.NumStripes
+		index = (index + stripeNr) % numStripes
 	}
-	return index
+	return uint16(index)
 }
 
 func btrfsFindDeviceByDevid(fsDevices *BtrfsFsDevices, devid uint64, instance int) *BtrfsDevice {
@@ -934,6 +942,7 @@ func btrfsFindDeviceByDevid(fsDevices *BtrfsFsDevices, devid uint64, instance in
 	}
 	return nil
 }
+
 func calcNumStripes(flags uint64) uint16 {
 
 	switch {
@@ -964,6 +973,8 @@ func isExtentRecordInDeviceExtent(er *ExtentRecord, dext *DeviceExtentRecord, mi
 	}
 	return false
 }
+
+// btrfsNextStripeLogicalOffset calc the logical offset which is the start of the next stripe
 func btrfsNextStripeLogicalOffset(chunk *ChunkRecord, logical uint64) uint64 {
 
 	var offset = logical - chunk.Offset
@@ -973,5 +984,5 @@ func btrfsNextStripeLogicalOffset(chunk *ChunkRecord, logical uint64) uint64 {
 	return offset + chunk.Offset
 }
 
-// TODO
+// TODO:
 // Proper support for multiple devices and device scan
