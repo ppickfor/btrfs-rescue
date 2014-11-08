@@ -331,20 +331,32 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 				if level == 0 {
 					// Leaf
 					//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
+					items := make([]BtrfsItem, nritems)
+					_ = binary.Read(bytereader, binary.LittleEndian, items)
+					for _, item := range items {
+						BtrfsPrintKey(&item.Key)
+						fmt.Printf("\n")
+					}
 					switch owner {
 					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
 						/* different tree use different generation */
-//						if generation <= rc.Generation {
-							items := make([]BtrfsItem, nritems)
-							_ = binary.Read(bytereader, binary.LittleEndian, items)
-							ExtractMetadataRecord(rc, generation, items, infoByteBlock)
-//						}
+						//						if generation <= rc.Generation {
+
+						ExtractMetadataRecord(rc, generation, items, infoByteBlock)
+						//						}
 					case BTRFS_CHUNK_TREE_OBJECTID:
-//						if generation <= rc.ChunkRootGeneration {
-							items := make([]BtrfsItem, nritems)
-							_ = binary.Read(bytereader, binary.LittleEndian, items)
-							ExtractMetadataRecord(rc, generation, items, infoByteBlock)
-//						}
+						//						if generation <= rc.ChunkRootGeneration {
+
+						ExtractMetadataRecord(rc, generation, items, infoByteBlock)
+						//						}
+					}
+				} else {
+					// node
+					items := make([]BtrfsKeyPtr, nritems)
+					_ = binary.Read(bytereader, binary.LittleEndian, items)
+					for _, item := range items {
+						BtrfsPrintKey(&item.Key)
+						fmt.Printf("\n")
 					}
 				}
 			} else {
