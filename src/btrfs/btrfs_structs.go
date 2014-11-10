@@ -46,7 +46,7 @@ type BlockGroupRecord struct {
 	Flags      uint64
 }
 
-// NewBlockGroupRecord create a new block group record from the a block heade, a block group ietem key and the items byte buffer
+// NewBlockGroupRecord create a new block group record from a block header, a block group item key and the items byte buffer
 func NewBlockGroupRecord(generation uint64, item *BtrfsItem, itemsBuf []byte) *BlockGroupRecord {
 
 	key := item.Key
@@ -445,18 +445,19 @@ type BtrfsInodeItem struct {
 	Size       uint64
 	Nbytes     uint64
 	Group      uint64
-	Nlink      uint64
-	Uid        uint64
-	Gid        uint64
-	Mode       uint64
+	Nlink      uint32
+	Uid        uint32
+	Gid        uint32
+	Mode       uint32
 	Rdev       uint64
 	Flags      uint64
 	Sequence   uint64
-	Reserved   [4]uint64
+	// Reserved not always zero (bug)
+	Reserved   [4]uint64 // spec says 20 bytes not 32 bytes but even that is wrong older versions write 160 bytes not 176 so drop Otime
 	Atime      BtrfsTimespec
 	Ctime      BtrfsTimespec
 	Mtime      BtrfsTimespec
-	Otime      BtrfsTimespec
+	//	Otime BtrfsTimespec
 }
 type BtrfsDirLogItem struct {
 	End uint64
@@ -521,10 +522,12 @@ type BtrfsFileExtentItem struct {
 	Encryption    uint8
 	OtherEncoding uint16
 	Type          uint8
-	DiskBytenr    uint64
-	DiskNumBytes  uint64
-	Offset        uint64
-	NumBytes      uint64
+}
+type BtrfsFileExtentItemCont struct {
+	DiskBytenr   uint64
+	DiskNumBytes uint64
+	Offset       uint64
+	NumBytes     uint64
 }
 type BtrfsCsumItem struct {
 	Csum uint8
