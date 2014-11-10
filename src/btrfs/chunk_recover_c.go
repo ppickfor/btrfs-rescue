@@ -1,7 +1,9 @@
 package btrfs
 
 import (
+	"bytes"
 	"container/list"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -35,6 +37,141 @@ func ExtractMetadataRecord(rc *RecoverControl, generation uint64, items []BtrfsI
 			//			break;
 		}
 	}
+}
+
+type inodeRec struct {
+	parent              uint64                             // from diritem
+	name                string                             // from diritem
+	Type                uint8                              // from diritem
+	inodeItem           BtrfsInodeItem                     // from inodeitem
+	fileExtentItems     map[uint64]BtrfsFileExtentItem     // from fileextentsitem
+	fileExtentItemsCont map[uint64]BtrfsFileExtentItemCont // from fileextentsitem
+	dirItems            map[string]BtrfsDirItem
+	data                []byte
+}
+type inodeKey struct {
+	owner uint64
+	inode uint64
+}
+
+var Inodes = make(map[inodeKey]inodeRec)
+
+// ProcessFileExtentItem extract file extent data from itembuf using the current item
+func ProcessFileExtentItem(fileExtentItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+
+	//	BtrfsPrintKey(&item.Key)
+	//	key := item.Key
+	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
+	bytereader := bytes.NewReader(itemPtr)
+
+	fileExtentItem := new(BtrfsFileExtentItem)
+	_ = binary.Read(bytereader, binary.LittleEndian, fileExtentItem)
+	inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
+	tmp := Inodes[inodeKey]
+	switch fileExtentItem.Type {
+	case BTRFS_FILE_EXTENT_INLINE:
+		// data follows
+		//		fmt.Printf(" Inline Size:%d %d", binary.Size(fileExtentItem), item.Size)
+		//		fmt.Printf(" %+v\n", fileExtentItem)
+		//		fmt.Printf("Data: %s\n", string(itemBuf[item.Offset+21:]))
+		if tmp.fileExtentItems == nil {
+			tmp.fileExtentItems = make(map[uint64]BtrfsFileExtentItem)
+			//			tmp.fileExtentItemsCont = make(map[uint64]BtrfsFileExtentItemCont)
+		}
+		tmp.fileExtentItems[item.Key.Offset] = *fileExtentItem
+		//		tmp.data = itemBuf[item.Offset+21:]
+		Inodes[inodeKey] = tmp
+	case BTRFS_FILE_EXTENT_REG, BTRFS_FILE_EXTENT_PREALLOC:
+		fileExtentItemCont := new(BtrfsFileExtentItemCont)
+		_ = binary.Read(bytereader, binary.LittleEndian, fileExtentItemCont)
+		//		fmt.Printf(" Reg Size:%d %d", binary.Size(fileExtentItem)+binary.Size(fileExtentItemCont), item.Size)
+		//		fmt.Printf(" %+v %+v\n", fileExtentItem, fileExtentItemCont)
+		if tmp.fileExtentItemsCont == nil {
+			tmp.fileExtentItems = make(map[uint64]BtrfsFileExtentItem)
+			tmp.fileExtentItemsCont = make(map[uint64]BtrfsFileExtentItemCont)
+		}
+		tmp.fileExtentItems[item.Key.Offset] = *fileExtentItem
+		tmp.fileExtentItemsCont[item.Key.Offset] = *fileExtentItemCont
+		Inodes[inodeKey] = tmp
+	}
+
+}
+
+// processInodeItem extract inode ref from itembuf using the current item
+func ProcessInodeItem(inodeItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+	//	key := item.Key
+	itemPtr := itemBuf[item.Offset:]
+	bytereader := bytes.NewReader(itemPtr)
+
+	inodeItem := new(BtrfsInodeItem)
+
+	_ = binary.Read(bytereader, binary.LittleEndian, inodeItem)
+	inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
+	tmp := Inodes[inodeKey]
+	tmp.inodeItem = *inodeItem
+	Inodes[inodeKey] = tmp
+	//	fmt.Printf("Size:%d ", binary.Size(inodeItem))
+	//
+	//	BtrfsPrintKey(&item.Key)
+	//	fmt.Printf(" %+v\n", inodeItem)
+
+}
+
+// processInodeRefItem extract inode ref from itembuf using the current item
+func ProcessInodeRefItem(inodeRefItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+	//	key := item.Key
+	//	BtrfsPrintKey(&item.Key)
+	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
+	bytereader := bytes.NewReader(itemPtr)
+	for bytereader.Len() != 0 {
+		inodeRef := new(BtrfsInodeRef)
+		_ = binary.Read(bytereader, binary.LittleEndian, inodeRef)
+		namebytes := make([]byte, inodeRef.Len)
+		_ = binary.Read(bytereader, binary.LittleEndian, namebytes)
+		//		fmt.Printf(" Ref index: %d, Name: %s\n", inodeRef.Index, string(namebytes))
+		inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
+		tmp := Inodes[inodeKey]
+		tmp.name = string(namebytes)
+		//		tmp.parent = uint64(item.Offset)
+		Inodes[inodeKey] = tmp
+	}
+}
+
+// processDirItem extract dir item from itembuf using the current item
+func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+
+	//	key := item.Key
+	//		BtrfsPrintKey(&item.Key)
+	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
+	bytereader := bytes.NewReader(itemPtr)
+	//		fmt.Printf(" ")
+	for bytereader.Len() != 0 {
+		dirItem := new(BtrfsDirItem)
+		_ = binary.Read(bytereader, binary.LittleEndian, dirItem)
+//		printDirItemType(dirItem)
+		//			BtrfsPrintKey(&dirItem.Location)
+		length := dirItem.NameLen
+		if length > BTRFS_NAME_LEN {
+			length = BTRFS_NAME_LEN
+		}
+		//		fmt.Printf(" namelen: %d ",length)
+		namebytes := make([]byte, length)
+		_ = binary.Read(bytereader, binary.LittleEndian, namebytes)
+
+		//				fmt.Printf(" %s ", string(namebytes))
+		if dirItem.DataLen != 0 {
+			databytes := make([]byte, dirItem.DataLen)
+			_ = binary.Read(bytereader, binary.LittleEndian, databytes)
+			//			fmt.Printf("datalen: %d", dirItem.DataLen)
+		}
+		inodeKey := inodeKey{owner: owner, inode: dirItem.Location.Objectid}
+		tmp := Inodes[inodeKey]
+		tmp.name = string(namebytes)
+		tmp.parent = item.Key.Objectid
+		tmp.Type = dirItem.Type
+		Inodes[inodeKey] = tmp
+	}
+	//		fmt.Printf("\n")
 }
 
 // processBlockGroupItem creates a new block group record and update the cache by latest generation for each blockgroup item
@@ -78,6 +215,25 @@ again:
 	}
 	bgCache.Tree.InsertNoReplace(rec)
 	rec.List = bgCache.Block_Groups.PushBack(rec)
+}
+
+// MapLogical maps a logical to a physical address
+func MapLogical(mapCache *llrb.LLRB, logical uint64) (error, uint64) {
+	mapSearch := &MapLookup{
+		CacheExtent: CacheExtent{
+			Start: logical,
+		},
+	}
+	var mapResult *MapLookup
+	// find previous MapLookup
+	mapCache.DescendLessOrEqual(mapSearch, func(i llrb.Item) bool {
+		mapResult = i.(*MapLookup)
+		return false
+	})
+	if mapResult != nil {
+		return nil, mapResult.Stripes[mapResult.NumStripes-1].Physical + logical - mapResult.CacheExtent.Start
+	}
+	return errors.New("No mapping"), 0
 }
 
 // processDeviceExtentItem creates a new device extent record and update the cache by latest generation
