@@ -5,6 +5,7 @@ import (
 )
 
 const (
+	BTRFS_NAME_LEN          = 255
 	BTRFS_MAX_MIRRORS       = 3
 	BTRFS_SIZE              = 4096
 	BTRFS_SUPER_INFO_OFFSET = (64 * 1024)
@@ -251,6 +252,21 @@ const (
 	 * data in the FS
 	 */
 	BTRFS_STRING_ITEM_KEY = 253
+
+	BTRFS_FT_UNKNOWN  = 0
+	BTRFS_FT_REG_FILE = 1
+	BTRFS_FT_DIR      = 2
+	BTRFS_FT_CHRDEV   = 3
+	BTRFS_FT_BLKDEV   = 4
+	BTRFS_FT_FIFO     = 5
+	BTRFS_FT_SOCK     = 6
+	BTRFS_FT_SYMLINK  = 7
+	BTRFS_FT_XATTR    = 8
+	BTRFS_FT_MAX      = 9
+
+	BTRFS_FILE_EXTENT_INLINE   = 0
+	BTRFS_FILE_EXTENT_REG      = 1
+	BTRFS_FILE_EXTENT_PREALLOC = 2
 )
 
 type (
