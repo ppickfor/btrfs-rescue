@@ -171,6 +171,10 @@ func main() {
 		fmt.Printf("%+v\n", i)
 		return true
 	})
+	fmt.Printf("\nAll %d Inodes\n", len(Inodes))
+	for k, v := range Inodes {
+		fmt.Printf("%+v %+v\n", k, v)
+	}
 
 }
 
@@ -334,8 +338,24 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					items := make([]BtrfsItem, nritems)
 					_ = binary.Read(bytereader, binary.LittleEndian, items)
 					for _, item := range items {
-						BtrfsPrintKey(&item.Key)
-						fmt.Printf("\n")
+						switch item.Key.Type {
+						case BTRFS_INODE_REF_KEY:
+							//							fmt.Printf("Owner: %d ", owner)
+							//							ProcessInodeRefItem(nil, owner, &item, infoByteBlock)
+						case BTRFS_DIR_ITEM_KEY:
+							//							fmt.Printf("Owner: %d ", owner)
+							ProcessDirItem(nil, owner, &item, infoByteBlock)
+						case BTRFS_INODE_ITEM_KEY:
+							//							fmt.Printf("Owner: %d ", owner)
+							ProcessInodeItem(nil, owner, &item, infoByteBlock)
+						case BTRFS_EXTENT_DATA_KEY:
+							//							fmt.Printf("Owner: %d ", owner)
+							ProcessFileExtentItem(nil, owner, &item, infoByteBlock)
+
+						}
+
+						//						BtrfsPrintKey(&item.Key)
+						//						fmt.Printf("\n")
 					}
 					switch owner {
 					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
@@ -352,12 +372,12 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					}
 				} else {
 					// node
-					items := make([]BtrfsKeyPtr, nritems)
-					_ = binary.Read(bytereader, binary.LittleEndian, items)
-					for _, item := range items {
-						BtrfsPrintKey(&item.Key)
-						fmt.Printf("\n")
-					}
+					//					items := make([]BtrfsKeyPtr, nritems)
+					//					_ = binary.Read(bytereader, binary.LittleEndian, items)
+					//					for _, item := range items {
+					//						BtrfsPrintKey(&item.Key)
+					//						fmt.Printf("\n")
+					//					}
 				}
 			} else {
 				fmt.Printf("\n\n cancel processItems %+v\n\n", ok)
