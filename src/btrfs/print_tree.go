@@ -5,6 +5,62 @@ import (
 	"math"
 )
 
+func printDirItemType(di *BtrfsDirItem) {
+	Type := di.Type
+
+	switch Type {
+	case BTRFS_FT_REG_FILE:
+		fmt.Printf("FILE")
+		break
+	case BTRFS_FT_DIR:
+		fmt.Printf("DIR")
+		break
+	case BTRFS_FT_CHRDEV:
+		fmt.Printf("CHRDEV")
+		break
+	case BTRFS_FT_BLKDEV:
+		fmt.Printf("BLKDEV")
+		break
+	case BTRFS_FT_FIFO:
+		fmt.Printf("FIFO")
+		break
+	case BTRFS_FT_SOCK:
+		fmt.Printf("SOCK")
+		break
+	case BTRFS_FT_SYMLINK:
+		fmt.Printf("SYMLINK")
+		break
+	case BTRFS_FT_XATTR:
+		fmt.Printf("XATTR")
+		break
+	default:
+		fmt.Printf("%d", Type)
+	}
+}
+func printInodeRefItem() {
+	//	struct extent_buffer *eb, struct btrfs_item *item,
+	//				struct btrfs_inode_ref *ref)
+	//{
+	//	u32 total;
+	//	u32 cur = 0;
+	//	u32 len;
+	//	u32 name_len;
+	//	u64 index;
+	//	char namebuf[BTRFS_NAME_LEN];
+	//	total = btrfs_item_size(eb, item);
+	//	while(cur < total) {
+	//		name_len = btrfs_inode_ref_name_len(eb, ref);
+	//		index = btrfs_inode_ref_index(eb, ref);
+	//		len = (name_len <= sizeof(namebuf))? name_len: sizeof(namebuf);
+	//		read_extent_buffer(eb, namebuf, (unsigned long)(ref + 1), len);
+	//		printf("\t\tinode ref index %llu namelen %u name: %.*s\n",
+	//		       (unsigned long long)index, name_len, len, namebuf);
+	//		len = sizeof(*ref) + name_len;
+	//		ref = (struct btrfs_inode_ref *)((char *)ref + len);
+	//		cur += len;
+	//	}
+	//	return 0;
+}
 func printObjectid(objectid uint64, Type uint8) {
 	switch Type {
 	case BTRFS_DEV_EXTENT_KEY:
@@ -14,9 +70,8 @@ func printObjectid(objectid uint64, Type uint8) {
 		fmt.Printf("%d/%d", objectid>>48,
 			objectid&((1<<48)-1))
 		return
-	case BTRFS_UUID_KEY_SUBVOL:
-	case BTRFS_UUID_KEY_RECEIVED_SUBVOL:
-		fmt.Printf("0x%016llx", objectid)
+	case BTRFS_UUID_KEY_SUBVOL, BTRFS_UUID_KEY_RECEIVED_SUBVOL:
+		fmt.Printf("0x%d", objectid)
 		return
 	}
 
@@ -224,15 +279,12 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 	fmt.Printf(" ")
 	printKeyType(objectid, Type)
 	switch Type {
-	case BTRFS_QGROUP_RELATION_KEY:
-	case BTRFS_QGROUP_INFO_KEY:
-	case BTRFS_QGROUP_LIMIT_KEY:
+	case BTRFS_QGROUP_RELATION_KEY, BTRFS_QGROUP_INFO_KEY, BTRFS_QGROUP_LIMIT_KEY:
 		fmt.Printf(" %d/%d)", (offset >> 48),
 			(offset & ((1 << 48) - 1)))
 		break
-	case BTRFS_UUID_KEY_SUBVOL:
-	case BTRFS_UUID_KEY_RECEIVED_SUBVOL:
-		fmt.Printf(" 0x%016llx)", offset)
+	case BTRFS_UUID_KEY_SUBVOL, BTRFS_UUID_KEY_RECEIVED_SUBVOL:
+		fmt.Printf(" 0x%d)", offset)
 		break
 	default:
 		if offset == -1&math.MaxUint64 {
@@ -243,6 +295,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 		break
 	}
 }
+
 //func btrfsPrintLeaf(root  *BtrfsRoot, l *ExtentBuffer ) {
 ////	int i
 ////	char *str
