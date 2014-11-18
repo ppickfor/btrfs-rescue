@@ -35,7 +35,7 @@ func TestBtrfsNextStripeLogicalOffset(t *testing.T) {
 	}
 	x := btrfsNextStripeLogicalOffset(chunk, 1024*1000)
 	if x != 1049600 {
-		t.Errorf("btrfsNextStripeLogicalOffset(chunk, 1024*1000) != 1049600 With chunk offset 1024, = %d",x)
+		t.Errorf("btrfsNextStripeLogicalOffset(chunk, 1024*1000) != 1049600 With chunk offset 1024, = %d", x)
 	}
 
 }
