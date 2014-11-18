@@ -39,22 +39,67 @@ func ExtractMetadataRecord(rc *RecoverControl, generation uint64, items []BtrfsI
 	}
 }
 
-type inodeRec struct {
-	parent              uint64                             // from diritem
-	name                string                             // from diritem
+type InodeRec struct {
+	Parent              uint64                             // from diritem or inoderef
+	Name                string                             // from diritem or inoderef
 	Type                uint8                              // from diritem
-	inodeItem           BtrfsInodeItem                     // from inodeitem
-	fileExtentItems     map[uint64]BtrfsFileExtentItem     // from fileextentsitem
-	fileExtentItemsCont map[uint64]BtrfsFileExtentItemCont // from fileextentsitem
-	dirItems            map[string]BtrfsDirItem
-	data                []byte
+	InodeItem           BtrfsInodeItem                     // from inodeitem
+	FileExtentItems     map[uint64]BtrfsFileExtentItem     // from fileextentsitem
+	FileExtentItemsCont map[uint64]BtrfsFileExtentItemCont // from fileextentsitem
+	DirItems            map[uint64]bool
+	Data                []byte
 }
-type inodeKey struct {
-	owner uint64
-	inode uint64
+type InodeKey struct {
+	Owner uint64
+	Inode uint64
+}
+type RootData struct {
+	Name     string
+	Treeid   uint64
+	Dirid    uint64
+	Sequence uint64
 }
 
-var Inodes = make(map[inodeKey]inodeRec)
+var Inodes = make(map[InodeKey]InodeRec)
+var Roots = make(map[uint64]RootData)
+
+func ProcessCsumItem(rootRefItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
+	nCsums := item.Size / 4
+	csums := make([]uint32, nCsums)
+	bytereader := bytes.NewReader(itemPtr)
+	//	csumItem := new(BtrfsCsumItem)
+	_ = binary.Read(bytereader, binary.LittleEndian, nCsums)
+	fmt.Printf("csumItem owner: %d key: %+v\n", owner, item)
+	fmt.Printf("csumItem value %+v\n", csums)
+}
+
+// ProcessRootRef extract root ref or backref info from item and bytebuffer
+func ProcessRootRef(rootRefItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
+
+	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
+	bytereader := bytes.NewReader(itemPtr)
+	rootRefItem := new(BtrfsRootRef)
+	_ = binary.Read(bytereader, binary.LittleEndian, rootRefItem)
+	namebytes := make([]byte, rootRefItem.Len)
+	_ = binary.Read(bytereader, binary.LittleEndian, namebytes)
+	switch item.Key.Type {
+	case BTRFS_ROOT_REF_KEY:
+		Roots[item.Key.Offset] = RootData{
+			Name:     string(namebytes),
+			Dirid:    rootRefItem.Dirid,
+			Treeid:   item.Key.Objectid,
+			Sequence: rootRefItem.Sequence,
+		}
+	case BTRFS_ROOT_BACKREF_KEY:
+		Roots[item.Key.Objectid] = RootData{
+			Name:     string(namebytes),
+			Dirid:    rootRefItem.Dirid,
+			Treeid:   item.Key.Offset,
+			Sequence: rootRefItem.Sequence,
+		}
+	}
+}
 
 // ProcessFileExtentItem extract file extent data from itembuf using the current item
 func ProcessFileExtentItem(fileExtentItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
@@ -63,64 +108,60 @@ func ProcessFileExtentItem(fileExtentItemCache *llrb.LLRB, owner uint64, item *B
 	//	key := item.Key
 	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
 	bytereader := bytes.NewReader(itemPtr)
-
 	fileExtentItem := new(BtrfsFileExtentItem)
 	_ = binary.Read(bytereader, binary.LittleEndian, fileExtentItem)
-	inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
-	tmp := Inodes[inodeKey]
+	k := InodeKey{
+		Owner: owner,
+		Inode: item.Key.Objectid,
+	}
+	tmp := Inodes[k]
+	if tmp.FileExtentItems == nil {
+		tmp.FileExtentItems = make(map[uint64]BtrfsFileExtentItem)
+	}
+	if fileExtentItem.Generation < tmp.FileExtentItems[item.Key.Offset].Generation {
+		return
+	}
+	tmp.FileExtentItems[item.Key.Offset] = *fileExtentItem
 	switch fileExtentItem.Type {
 	case BTRFS_FILE_EXTENT_INLINE:
 		// data follows
 		//		fmt.Printf(" Inline Size:%d %d", binary.Size(fileExtentItem), item.Size)
-		//		fmt.Printf(" %+v\n", fileExtentItem)
+
 		//		fmt.Printf("Data: %s\n", string(itemBuf[item.Offset+21:]))
-		if tmp.fileExtentItems == nil {
-			tmp.fileExtentItems = make(map[uint64]BtrfsFileExtentItem)
-			//			tmp.fileExtentItemsCont = make(map[uint64]BtrfsFileExtentItemCont)
-		}
-		tmp.fileExtentItems[item.Key.Offset] = *fileExtentItem
-		//		tmp.data = itemBuf[item.Offset+21:]
-		Inodes[inodeKey] = tmp
+		tmp.Data = itemBuf[item.Offset+21:]
 	case BTRFS_FILE_EXTENT_REG, BTRFS_FILE_EXTENT_PREALLOC:
 		fileExtentItemCont := new(BtrfsFileExtentItemCont)
 		_ = binary.Read(bytereader, binary.LittleEndian, fileExtentItemCont)
-		//		fmt.Printf(" Reg Size:%d %d", binary.Size(fileExtentItem)+binary.Size(fileExtentItemCont), item.Size)
-		//		fmt.Printf(" %+v %+v\n", fileExtentItem, fileExtentItemCont)
-		if tmp.fileExtentItemsCont == nil {
-			tmp.fileExtentItems = make(map[uint64]BtrfsFileExtentItem)
-			tmp.fileExtentItemsCont = make(map[uint64]BtrfsFileExtentItemCont)
+		if tmp.FileExtentItemsCont == nil {
+			tmp.FileExtentItemsCont = make(map[uint64]BtrfsFileExtentItemCont)
 		}
-		tmp.fileExtentItems[item.Key.Offset] = *fileExtentItem
-		tmp.fileExtentItemsCont[item.Key.Offset] = *fileExtentItemCont
-		Inodes[inodeKey] = tmp
+		tmp.FileExtentItems[item.Key.Offset] = *fileExtentItem
+		tmp.FileExtentItemsCont[item.Key.Offset] = *fileExtentItemCont
+		//		fmt.Printf("ProcessFileExtentItem ite %+v\n", item)
+		//		fmt.Printf("BtrfsFileExtentItem %+v\n", fileExtentItem)
+		//		fmt.Printf("BtrfsFileExtentItemCont %+v\n", fileExtentItemCont)
 	}
-
+	Inodes[k] = tmp
 }
 
 // processInodeItem extract inode ref from itembuf using the current item
 func ProcessInodeItem(inodeItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
-	//	key := item.Key
+
 	itemPtr := itemBuf[item.Offset:]
 	bytereader := bytes.NewReader(itemPtr)
-
 	inodeItem := new(BtrfsInodeItem)
-
 	_ = binary.Read(bytereader, binary.LittleEndian, inodeItem)
-	inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
-	tmp := Inodes[inodeKey]
-	tmp.inodeItem = *inodeItem
-	Inodes[inodeKey] = tmp
-	//	fmt.Printf("Size:%d ", binary.Size(inodeItem))
-	//
-	//	BtrfsPrintKey(&item.Key)
-	//	fmt.Printf(" %+v\n", inodeItem)
-
+	k := InodeKey{
+		Owner: owner,
+		Inode: item.Key.Objectid,
+	}
+	tmp := Inodes[k]
+	tmp.InodeItem = *inodeItem
+	Inodes[k] = tmp
 }
 
 // processInodeRefItem extract inode ref from itembuf using the current item
 func ProcessInodeRefItem(inodeRefItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, itemBuf []byte) {
-	//	key := item.Key
-	//	BtrfsPrintKey(&item.Key)
 	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
 	bytereader := bytes.NewReader(itemPtr)
 	for bytereader.Len() != 0 {
@@ -128,12 +169,42 @@ func ProcessInodeRefItem(inodeRefItemCache *llrb.LLRB, owner uint64, item *Btrfs
 		_ = binary.Read(bytereader, binary.LittleEndian, inodeRef)
 		namebytes := make([]byte, inodeRef.Len)
 		_ = binary.Read(bytereader, binary.LittleEndian, namebytes)
-		//		fmt.Printf(" Ref index: %d, Name: %s\n", inodeRef.Index, string(namebytes))
-		inodeKey := inodeKey{owner: owner, inode: item.Key.Objectid}
-		tmp := Inodes[inodeKey]
-		tmp.name = string(namebytes)
-		//		tmp.parent = uint64(item.Offset)
-		Inodes[inodeKey] = tmp
+		k := InodeKey{
+			Owner: owner,
+			Inode: item.Key.Objectid,
+		}
+		tmp := Inodes[k]
+		if tmp.Name == "" {
+			tmp.Name = string(namebytes)
+		}
+		if tmp.Parent == 0 {
+			tmp.Parent = item.Key.Offset
+		}
+		Inodes[k] = tmp
+		// dont point back to yourself
+		if item.Key.Objectid != item.Key.Offset {
+			// build dir items
+			k = InodeKey{
+				Owner: owner,
+				Inode: item.Key.Offset,
+			}
+			tmp = Inodes[k]
+			if tmp.DirItems == nil {
+				tmp.DirItems = make(map[uint64]bool)
+			}
+			tmp.Type = BTRFS_FT_DIR
+			tmp.DirItems[item.Key.Objectid] = true
+			Inodes[k] = tmp
+		} else {
+			// remove name for root dir
+			k = InodeKey{
+				Owner: owner,
+				Inode: item.Key.Offset,
+			}
+			tmp = Inodes[k]
+			tmp.Name = ""
+			Inodes[k] = tmp
+		}
 	}
 }
 
@@ -148,7 +219,7 @@ func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, item
 	for bytereader.Len() != 0 {
 		dirItem := new(BtrfsDirItem)
 		_ = binary.Read(bytereader, binary.LittleEndian, dirItem)
-//		printDirItemType(dirItem)
+		//		printDirItemType(dirItem)
 		//			BtrfsPrintKey(&dirItem.Location)
 		length := dirItem.NameLen
 		if length > BTRFS_NAME_LEN {
@@ -164,12 +235,38 @@ func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, item
 			_ = binary.Read(bytereader, binary.LittleEndian, databytes)
 			//			fmt.Printf("datalen: %d", dirItem.DataLen)
 		}
-		inodeKey := inodeKey{owner: owner, inode: dirItem.Location.Objectid}
-		tmp := Inodes[inodeKey]
-		tmp.name = string(namebytes)
-		tmp.parent = item.Key.Objectid
+		k := InodeKey{
+			Owner: owner,
+			Inode: dirItem.Location.Objectid,
+		}
+		tmp := Inodes[k]
+		tmp.Name = string(namebytes)
+		tmp.Parent = item.Key.Objectid
 		tmp.Type = dirItem.Type
-		Inodes[inodeKey] = tmp
+		Inodes[k] = tmp
+		if dirItem.Location.Objectid != item.Key.Objectid {
+			// build dir items
+			k = InodeKey{
+				Owner: owner,
+				Inode: item.Key.Objectid,
+			}
+			tmp = Inodes[k]
+			if tmp.DirItems == nil {
+				tmp.DirItems = make(map[uint64]bool)
+			}
+			tmp.Type = BTRFS_FT_DIR
+			tmp.DirItems[dirItem.Location.Objectid] = true
+			Inodes[k] = tmp
+		} else {
+			// remove name for root dir
+			k = InodeKey{
+				Owner: owner,
+				Inode: item.Key.Offset,
+			}
+			tmp = Inodes[k]
+			tmp.Name = ""
+			Inodes[k] = tmp
+		}
 	}
 	//		fmt.Printf("\n")
 }
@@ -231,6 +328,7 @@ func MapLogical(mapCache *llrb.LLRB, logical uint64) (error, uint64) {
 		return false
 	})
 	if mapResult != nil {
+		fmt.Printf("MapLogical: searched %d, found %v\n", logical, mapResult)
 		return nil, mapResult.Stripes[mapResult.NumStripes-1].Physical + logical - mapResult.CacheExtent.Start
 	}
 	return errors.New("No mapping"), 0
@@ -719,7 +817,8 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 		devExts := list.New()
 		nstripes := btrfsGetDeviceExtents(bg.Objectid, rc.Devext.ChunkOrphans, devExts)
 		if nstripes == 0 {
-			nstripes = fixupDevExt(bg, &rc.Devext, devExts)
+			// this seems to break mapping for some reason
+			//			nstripes = fixupDevExt(bg, &rc.Devext, devExts)
 		}
 		fmt.Printf("BG  offset  %d found count %d #devExt %d\n", bg.Objectid, nstripes, devExts.Len())
 		chunk := &ChunkRecord{

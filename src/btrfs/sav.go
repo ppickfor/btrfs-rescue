@@ -1,7 +1,5 @@
 package btrfs
 
-import ()
-
 //	offsets := [...]uint64{
 //		0,
 //		4194304,

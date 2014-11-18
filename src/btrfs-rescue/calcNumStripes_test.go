@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	. "btrfs"
+	"testing"
 )
 
 func TestCalcNumStripes(t *testing.T) {
