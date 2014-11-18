@@ -437,7 +437,7 @@ type BtrfsInodeExtref struct {
 }
 type BtrfsTimespec struct {
 	Sec  uint64
-	Nsec uint64
+	Nsec uint32
 }
 type BtrfsInodeItem struct {
 	Generation uint64
@@ -453,11 +453,11 @@ type BtrfsInodeItem struct {
 	Flags      uint64
 	Sequence   uint64
 	// Reserved not always zero (bug)
-	Reserved   [4]uint64 // spec says 20 bytes not 32 bytes but even that is wrong older versions write 160 bytes not 176 so drop Otime
-	Atime      BtrfsTimespec
-	Ctime      BtrfsTimespec
-	Mtime      BtrfsTimespec
-	//	Otime BtrfsTimespec
+	Reserved [4]uint64
+	Atime    BtrfsTimespec
+	Ctime    BtrfsTimespec
+	Mtime    BtrfsTimespec
+	Otime    BtrfsTimespec
 }
 type BtrfsDirLogItem struct {
 	End uint64
@@ -530,7 +530,7 @@ type BtrfsFileExtentItemCont struct {
 	NumBytes     uint64
 }
 type BtrfsCsumItem struct {
-	Csum uint8
+	Csum uint32
 }
 type BtrfsQgroupStatusItem struct {
 	Version    uint64
