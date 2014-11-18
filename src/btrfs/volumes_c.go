@@ -3,7 +3,7 @@ package btrfs
 import (
 	"bytes"
 	"container/list"
-	)
+)
 
 func btrfsScanOneDevice(
 	fd int,
@@ -160,7 +160,7 @@ func buildDeviceMapByChunkRecord(root *BtrfsRoot, chunk *ChunkRecord) {
 		StripeLen:  int32(chunk.StripeLen),
 		Type:       chunk.TypeFlags,
 		SubStripes: int32(chunk.SubStripes),
-		Stripes: make([]BtrfsBioStripe,numStripes),
+		Stripes:    make([]BtrfsBioStripe, numStripes),
 	}
 	for i, stripe := range chunk.Stripes {
 		devId := stripe.Devid
