@@ -453,11 +453,11 @@ type BtrfsInodeItem struct {
 	Flags      uint64
 	Sequence   uint64
 	// Reserved not always zero (bug)
-	Reserved [4]uint64 // spec says 20 bytes not 32 bytes but even that is wrong older versions write 160 bytes not 176 so drop Otime
+	Reserved [4]uint64
 	Atime    BtrfsTimespec
 	Ctime    BtrfsTimespec
 	Mtime    BtrfsTimespec
-	//	Otime BtrfsTimespec
+	Otime    BtrfsTimespec
 }
 type BtrfsDirLogItem struct {
 	End uint64
