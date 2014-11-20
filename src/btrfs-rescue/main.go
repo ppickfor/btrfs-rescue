@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/monnand/GoLLRB/llrb"
+
 	"code.google.com/p/go.net/context"
 )
 
@@ -74,7 +76,7 @@ func main() {
 	// create a new file to get list of valid bytnrs for this run
 	if len(*writeBytenrFlag) != 0 {
 		var err error
-		fmt.Printf("\nWriting new bytenr file to %v\n", *writeBytenrFlag)
+		fmt.Fprintf(os.Stderr,"\nWriting new bytenr file to %v\n", *writeBytenrFlag)
 		wfile, err = os.Create(*writeBytenrFlag)
 		if err != nil {
 			log.Fatal(err)
@@ -95,7 +97,7 @@ func main() {
 	go headerConsumer(ctx, cancel, headerBlockchan, itemBlockChan, rc)
 	go processItems(ctx, cancel, itemBlockChan, rc)
 	//	treeBlock := new(treeBlock)
-	//			fmt.Printf("rc: %+v\n", rc)
+	//			fmt.Fprintf(os.Stderr,"rc: %+v\n", rc)
 	size := uint64(rc.Leafsize)
 	//	fsid := rc.Fsid[:]
 	if len(*bytenrFlag) == 0 {
@@ -107,13 +109,13 @@ func main() {
 		for bytenr := start; bytenr < end; bytenr += size {
 			select {
 			case <-ctx.Done():
-				fmt.Printf("Done countFromParams\n")
+				fmt.Fprintf(os.Stderr,"Done countFromParams\n")
 				break countFromParams
 			case bytenrChan <- bytenr:
 				i++
 			}
 		}
-		fmt.Printf("Read %d uint64s\n", i)
+		fmt.Fprintf(os.Stderr,"Read %d uint64s\n", i)
 	} else {
 		file, err := os.Open(*bytenrFlag)
 		if err != nil {
@@ -130,7 +132,7 @@ func main() {
 			}
 			select {
 			case <-ctx.Done():
-				fmt.Printf("Done readFromFile\n")
+				fmt.Fprintf(os.Stderr,"Done readFromFile\n")
 				break readFromFile
 			case bytenrChan <- bytenr:
 			}
@@ -138,7 +140,7 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			fmt.Println(err)
 		}
-		fmt.Printf("Read %d uint64s\n", i)
+		fmt.Fprintf(os.Stderr,"Read %d uint64s\n", i)
 	}
 	close(bytenrChan)
 	wg.Wait()
@@ -146,51 +148,71 @@ func main() {
 
 	BtrfsRecoverChunks(rc)
 	BuildDeviceMapsByChunkRecords(rc, root)
-	fmt.Printf("Bad Chunks: %d\n", rc.BadChunks.Len())
-	fmt.Printf("Good Chunks: %d\n", rc.GoodChunks.Len())
-	fmt.Printf("Urepaired Chunks: %d\n", rc.UnrepairedChunks.Len())
-	fmt.Printf("Device Orphans: %d\n", rc.Devext.DeviceOrphans.Len())
-	fmt.Printf("Chunk Orphans: %d\n", rc.Devext.ChunkOrphans.Len())
+	fmt.Fprintf(os.Stderr,"Bad Chunks: %d\n", rc.BadChunks.Len())
+	fmt.Fprintf(os.Stderr,"Good Chunks: %d\n", rc.GoodChunks.Len())
+	fmt.Fprintf(os.Stderr,"Urepaired Chunks: %d\n", rc.UnrepairedChunks.Len())
+	fmt.Fprintf(os.Stderr,"Device Orphans: %d\n", rc.Devext.DeviceOrphans.Len())
+	fmt.Fprintf(os.Stderr,"Chunk Orphans: %d\n", rc.Devext.ChunkOrphans.Len())
 
-	fmt.Printf("\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len())
+	fmt.Fprintf(os.Stderr,"\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len())
 	//	root.FsInfo.MappingTree.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Printf("%+v\n", i)
+	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
 	//		return true
 	//	})
-	//	fmt.Printf("\nAll %d Extent buffers\n", rc.EbCache.Len())
+	//	fmt.Fprintf(os.Stderr,"\nAll %d Extent buffers\n", rc.EbCache.Len())
 	//	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Printf("%+v\n", i)
+	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
 	//		return true
 	//	})
-	fmt.Printf("\nAll %d Block Groups\n", rc.Bg.Tree.Len())
-	//	rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Printf("%+v\n", i)
-	//		return true
-	//	})
-	fmt.Printf("\nAll %d Chunks\n", rc.Chunk.Len())
+	fmt.Fprintf(os.Stderr,"\nAll %d Block Groups\n", rc.Bg.Tree.Len())
+	rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		bg := i.(*BlockGroupRecord)
+		fmt.Fprintf(os.Stderr,"BlockGroup: Cache.id: %d Cache.Start: %d Cache.Size: %d Offset: %d Start: %d Size: %d Type: %d Flags: %d Generation: %d\n",
+			bg.CacheExtent.Objectid,
+			bg.CacheExtent.Start,
+			bg.CacheExtent.Size,
+			bg.Offset,
+			bg.Start,
+			bg.Size,
+			bg.Type,
+			bg.Flags,
+			bg.Generation,
+		)
+		return true
+	})
+	fmt.Fprintf(os.Stderr,"\nAll %d Chunks\n", rc.Chunk.Len())
 	//	rc.Chunk.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Printf("%+v\n", i)
+	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
 	//		return true
 	//	})
-	fmt.Printf("\nAll %d Device Extents\n", rc.Devext.Tree.Len())
-	//	rc.Devext.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Printf("%+v\n", i)
-	//		return true
-	//	})
-	fmt.Printf("\nAll %d Inodes\n", len(Inodes))
+	fmt.Fprintf(os.Stderr,"\nAll %d Device Extents\n", rc.Devext.Tree.Len())
+	rc.Devext.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		devExt := i.(*DeviceExtentRecord)
+		fmt.Fprintf(os.Stderr,"Devext: Cache.Start: %d Cache.Size: %d Offset: %d Length: %d Start: %d Size: %d Generation: %d\n",
+			devExt.CacheExtent.Start,
+			devExt.CacheExtent.Size,
+			devExt.ChunkOffset,
+			devExt.Length,
+			devExt.Start,
+			devExt.Size,
+			devExt.Generation,
+		)
+		return true
+	})
+	fmt.Fprintf(os.Stderr,"\nAll %d Inodes\n", len(Inodes))
 	//	for k, v := range Inodes {
-	//		fmt.Printf("%+v %+v\n", k, v)
+	//		fmt.Fprintf(os.Stderr,"%+v %+v\n", k, v)
 	//	}
 	var keys []uint64
 	for k, _ := range Roots {
 		keys = append(keys, k)
 	}
 	sort.Sort(ByInt64(keys))
-	fmt.Printf("\nAll %d Root\n", len(Roots))
+	fmt.Fprintf(os.Stderr,"\nAll %d Root\n", len(Roots))
 	for _, i := range keys {
-		fmt.Printf("%d %+v\n", i, Roots[i])
+		fmt.Fprintf(os.Stderr,"%d %+v\n", i, Roots[i])
 	}
-	fmt.Printf("\nAll Files\n")
+	fmt.Fprintf(os.Stderr,"\nAll Files\n")
 	// file tree
 	for _, i := range keys {
 		depthFirstPrint(i, 256, Roots[i].Name)
@@ -201,7 +223,7 @@ func main() {
 			cmd := exec.Command("/usr/bin/btrfs", "subvolume", "create", *rootDirFlag+"/"+Roots[i].Name)
 			err := cmd.Run()
 			if err != nil {
-				fmt.Printf("cmd.Run: failed %v\n", err)
+				fmt.Fprintf(os.Stderr,"cmd.Run: failed %v\n", err)
 			}
 			syscall.Sync()
 		}
@@ -235,10 +257,10 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 			switch {
 			case Inodes[k].Data != nil:
 				// inline data
-				//				fmt.Printf("Path: %s Len: %d\n", path, len(Inodes[k].Data))
+				//				fmt.Fprintf(os.Stderr,"Path: %s Len: %d\n", path, len(Inodes[k].Data))
 				n, err := file.Write(Inodes[k].Data)
 				if err != nil {
-					fmt.Printf("Write: %s %d %v\n", path, n, err)
+					fmt.Fprintf(os.Stderr,"Write: %s %d %v\n", path, n, err)
 				}
 				fallthrough // just in case
 			case Inodes[k].FileExtentItemsCont != nil:
@@ -258,18 +280,18 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 						bytenr += offset
 					}
 					if err, physical := MapLogical(root.FsInfo.MappingTree.Tree, bytenr); err == nil {
-						fmt.Printf("MapLogical: %d to %d\n", bytenr, physical)
+						fmt.Fprintf(os.Stderr,"MapLogical: %d to %d\n", bytenr, physical)
 						byteblock := make([]byte, length)
 						ret, err := syscall.Pread(rc.Fd, byteblock, int64(physical))
 						byteblock = byteblock[:ret]
 						if err != nil {
-							fmt.Printf("Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
+							fmt.Fprintf(os.Stderr,"Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
 							continue
 						} else {
 							if uint64(ret) != length {
-								fmt.Printf("Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
+								fmt.Fprintf(os.Stderr,"Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
 							} else {
-								fmt.Printf("Pread: %s %d @%d\n", path, length, physical)
+								fmt.Fprintf(os.Stderr,"Pread: %s %d @%d\n", path, length, physical)
 							}
 						}
 						// total=0;
@@ -285,12 +307,12 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 						//	}
 						n, err := file.WriteAt(byteblock, int64(fileOffset))
 						if err != nil {
-							fmt.Printf("WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
+							fmt.Fprintf(os.Stderr,"WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
 						} else {
-							fmt.Printf("Written: %s %d @%d\n", path, n, fileOffset)
+							fmt.Fprintf(os.Stderr,"Written: %s %d @%d\n", path, n, fileOffset)
 						}
 					} else {
-						fmt.Printf("MapLogical: failed %s %d %v\n", path, bytenr, err)
+						fmt.Fprintf(os.Stderr,"MapLogical: failed %s %d %v\n", path, bytenr, err)
 					}
 				}
 			}
@@ -298,7 +320,7 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 			if Inodes[k].InodeItem.Size > 0 {
 				err := file.Truncate(int64(Inodes[k].InodeItem.Size))
 				if err != nil {
-					fmt.Printf("Truncate: %d %s %v\n", Inodes[k].InodeItem.Size, path, err)
+					fmt.Fprintf(os.Stderr,"Truncate: %d %s %v\n", Inodes[k].InodeItem.Size, path, err)
 				}
 			}
 			file.Chown(int(Inodes[k].InodeItem.Uid), int(Inodes[k].InodeItem.Gid))
@@ -324,7 +346,7 @@ func depthFirstPrint(tree, dirInode uint64, path string) {
 		Inode: dirInode,
 	}
 	path = path + "/" + Inodes[k].Name
-	fmt.Printf("%s\n", path)
+	fmt.Fprintf(os.Stderr,"%s\n", path)
 	if Inodes[k].DirItems != nil {
 		for child, _ := range Inodes[k].DirItems {
 			depthFirstPrint(tree, child, path)
@@ -356,17 +378,17 @@ loop:
 
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Done byteConsumer\n")
+			fmt.Fprintf(os.Stderr,"Done byteConsumer\n")
 			break loop
 		case bytenr, ok := <-bytenrsChan:
-			//			fmt.Printf("got byte %08x, staus %v\r", bytenr, ok)
+			//			fmt.Fprintf(os.Stderr,"got byte %08x, staus %v\r", bytenr, ok)
 			if ok {
 				switch bytenr {
 				case off0, off1, off2:
 					// superblock
 					continue loop
 				default:
-					//					fmt.Printf("size: %d, byteblock: %v\n", size, byteblock)
+					//					fmt.Fprintf(os.Stderr,"size: %d, byteblock: %v\n", size, byteblock)
 					goodBlock, err := BtrfsReadTreeblock(rc.Fd, bytenr, size, fsid, &byteblock)
 					if goodBlock {
 						treeBlock := treeBlock{bytenr: bytenr, byteblock: make([]byte, size)}
@@ -375,8 +397,8 @@ loop:
 					} else {
 						if err != nil {
 							fmt.Println(err)
-							fmt.Printf("byteConsumer BtrfsReadTreeblock failed %v\n", err)
-							fmt.Printf("byteConsumer read %d uint64s\n", i)
+							fmt.Fprintf(os.Stderr,"byteConsumer BtrfsReadTreeblock failed %v\n", err)
+							fmt.Fprintf(os.Stderr,"byteConsumer read %d uint64s\n", i)
 							cancel()
 							break loop
 						} else {
@@ -385,8 +407,8 @@ loop:
 					}
 				}
 			} else {
-				fmt.Printf("\n\n cancel byteConsumer %v\n\n", ok)
-				fmt.Printf("byteConsumer %d blocks with bad fsid\n", i)
+				fmt.Fprintf(os.Stderr,"\n\n cancel byteConsumer %v\n\n", ok)
+				fmt.Fprintf(os.Stderr,"byteConsumer %d blocks with bad fsid\n", i)
 				//				cancel()
 				break loop
 			}
@@ -406,7 +428,7 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Done csumByteblock\n")
+			fmt.Fprintf(os.Stderr,"Done csumByteblock\n")
 			return
 		case treeBlock, ok := <-in:
 			if ok {
@@ -420,23 +442,23 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 				crc := crc32.Checksum((byteblock)[BTRFS_CSUM_SIZE:], Crc32c)
 				if crc != csum {
 					bytenr := treeBlock.bytenr
-					fmt.Printf("crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
+					fmt.Fprintf(os.Stderr,"crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
 				} else {
 					if wfile != nil {
 						fmt.Fprintf(wfile, "%d\n", bytenr)
 					}
 					out <- treeBlock
 				}
-				//		fmt.Printf("read treeblock @%d, %v\n",bytenr,(*byteblock)[0:4])
+				//		fmt.Fprintf(os.Stderr,"read treeblock @%d, %v\n",bytenr,(*byteblock)[0:4])
 				//		inc++
 				//		outc++
 				//		ins= ins+len(in)
 				//		outs=outs+len(out)
-				//		fmt.Printf("csumByteblock Chan len in: %03.2f out: %03.2f\r",float64(ins)/float64(inc),float64(outs)/float64(outc))
+				//		fmt.Fprintf(os.Stderr,"csumByteblock Chan len in: %03.2f out: %03.2f\r",float64(ins)/float64(inc),float64(outs)/float64(outc))
 			} else {
-				fmt.Printf("\n\n cancel csumByteblock, %v\n\n", ok)
-				fmt.Printf("csumByteblock: read %d treeblocks\n", i)
-				fmt.Printf("csumByteblock: last bytenr %d\n", last)
+				fmt.Fprintf(os.Stderr,"\n\n cancel csumByteblock, %v\n\n", ok)
+				fmt.Fprintf(os.Stderr,"csumByteblock: read %d treeblocks\n", i)
+				fmt.Fprintf(os.Stderr,"csumByteblock: last bytenr %d\n", last)
 				//				cancel()
 				return
 			}
@@ -455,17 +477,17 @@ func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockc
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Done headerConsumer\n")
+			fmt.Fprintf(os.Stderr,"Done headerConsumer\n")
 			return
 		case treeBlock, ok := <-headerBlockchan:
 			if ok {
 				//			treeBlock = treeBlock
-				//		fmt.Printf("treeBlock: %+v\n", treeBlock)
-				//		fmt.Printf("from chan treeblock: @%d, %v\n", treeBlock.bytent, treeBlock.byteblock[0:4])
+				//		fmt.Fprintf(os.Stderr,"treeBlock: %+v\n", treeBlock)
+				//		fmt.Fprintf(os.Stderr,"from chan treeblock: @%d, %v\n", treeBlock.bytent, treeBlock.byteblock[0:4])
 				detailBlock(&treeBlock, itemBlockChan, rc)
 			} else {
-				fmt.Printf("\n\n cancel headerConsumer %v\n\n", ok)
-				fmt.Printf("headerConsumer read %d treeblocks\n", i)
+				fmt.Fprintf(os.Stderr,"\n\n cancel headerConsumer %v\n\n", ok)
+				fmt.Fprintf(os.Stderr,"headerConsumer read %d treeblocks\n", i)
 				//				cancel()
 				return
 			}
@@ -483,7 +505,7 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Done processItems\n")
+			fmt.Fprintf(os.Stderr,"Done processItems\n")
 			return
 		case itemBlock, ok := <-itemBlockChan:
 			if ok {
@@ -495,7 +517,7 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 				bytereader := bytes.NewReader(infoByteBlock)
 				if level == 0 {
 					// Leaf
-					//			fmt.Printf("Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
+					//			fmt.Fprintf(os.Stderr,"Leaf @%08x: Items: %d\r", bytenr, leaf.Header.Nritems)
 					items := make([]BtrfsItem, nritems)
 					_ = binary.Read(bytereader, binary.LittleEndian, items)
 					for _, item := range items {
@@ -503,16 +525,16 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 						case BTRFS_CSUM_ITEM_KEY:
 							ProcessCsumItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_INODE_REF_KEY:
-							//							fmt.Printf("Owner: %d ", owner)
+							//							fmt.Fprintf(os.Stderr,"Owner: %d ", owner)
 							ProcessInodeRefItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_DIR_ITEM_KEY, BTRFS_DIR_INDEX_KEY:
-							//							fmt.Printf("Owner: %d ", owner)
+							//							fmt.Fprintf(os.Stderr,"Owner: %d ", owner)
 							ProcessDirItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_INODE_ITEM_KEY:
-							//							fmt.Printf("Owner: %d ", owner)
+							//							fmt.Fprintf(os.Stderr,"Owner: %d ", owner)
 							ProcessInodeItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_EXTENT_DATA_KEY:
-							//							fmt.Printf("Owner: %d ", owner)
+							//							fmt.Fprintf(os.Stderr,"Owner: %d ", owner)
 							ProcessFileExtentItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_ROOT_REF_KEY, BTRFS_ROOT_BACKREF_KEY:
 							ProcessRootRef(nil, owner, &item, infoByteBlock)
@@ -520,7 +542,7 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 						}
 
 						//						BtrfsPrintKey(&item.Key)
-						//						fmt.Printf("\n")
+						//						fmt.Fprintf(os.Stderr,"\n")
 					}
 					switch owner {
 					case BTRFS_EXTENT_TREE_OBJECTID, BTRFS_DEV_TREE_OBJECTID:
@@ -541,12 +563,12 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					//					_ = binary.Read(bytereader, binary.LittleEndian, items)
 					//					for _, item := range items {
 					//						BtrfsPrintKey(&item.Key)
-					//						fmt.Printf("\n")
+					//						fmt.Fprintf(os.Stderr,"\n")
 					//					}
 				}
 			} else {
-				fmt.Printf("\n\n cancel processItems %+v\n\n", ok)
-				fmt.Printf("processItems read %d itemblocks\n", i)
+				fmt.Fprintf(os.Stderr,"\n\n cancel processItems %+v\n\n", ok)
+				fmt.Fprintf(os.Stderr,"processItems read %d itemblocks\n", i)
 				//				cancel()
 				return
 			}
@@ -569,7 +591,7 @@ again:
 	if i := tree.Get(er); i != nil {
 		exists := i.(*ExtentRecord)
 		if exists.Generation > er.Generation {
-			//				fmt.Printf("Exists:%d\r", tree.Len())
+			//				fmt.Fprintf(os.Stderr,"Exists:%d\r", tree.Len())
 			return
 		}
 		if exists.Generation == er.Generation {
@@ -577,11 +599,11 @@ again:
 				exists.CacheExtent.Size != er.CacheExtent.Size ||
 				bytes.Compare(exists.Csum[:], er.Csum[:]) != 0 {
 				//							exists but different
-				fmt.Printf("detailBlock: Exists but dif %+v\n", er)
+				fmt.Fprintf(os.Stderr,"detailBlock: Exists but dif %+v\n", er)
 				return
 			} else {
-				//					fmt.Printf("Mirror:%d\r", tree.Len())
-				//				fmt.Printf("mirror %+v\n", exists.(*ExtentRecord))
+				//					fmt.Fprintf(os.Stderr,"Mirror:%d\r", tree.Len())
+				//				fmt.Fprintf(os.Stderr,"mirror %+v\n", exists.(*ExtentRecord))
 				if exists.Nmirrors < BTRFS_SUPER_MIRROR_MAX {
 					// TODO
 					//					exists.Devices[exists.Nmirrors] = nil
@@ -593,7 +615,7 @@ again:
 			}
 		}
 		tree.Delete(er)
-		//			fmt.Printf("Worse:%d\n", tree.Len())
+		//			fmt.Fprintf(os.Stderr,"Worse:%d\n", tree.Len())
 		goto again
 	}
 	//	er.Devices[0] = nil
