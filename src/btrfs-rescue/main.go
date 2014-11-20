@@ -31,17 +31,28 @@ const (
 
 // The flag package provides a default help printer via -h switch
 var (
-	versionFlag     *bool   = flag.Bool("v", false, "Print the version number.")
+	verboseFlag     *int    = flag.Int("v", 0, "Print logging info.")
 	deviceFlag      *string = flag.String("d", DEFAULT_DEVICE, "The device to scan")
 	blocksFlag      *int64  = flag.Int64("n", DEFAULT_BLOCKS, "The number of BTRFS_SIZE blocks to read")
 	startblocksFlag *int64  = flag.Int64("s", 0, "The number of BTRFS_SIZE blocks to start at")
 	bytenrFlag      *string = flag.String("b", "", "The previously scanned block bytenrs")
 	writeBytenrFlag *string = flag.String("w", "", "The new scanned block bytenrs")
 	rootDirFlag     *string = flag.String("r", "", "The root dirctory to restore to")
+	fakeBGFlag      *bool   = flag.Bool("fakeBG", false, "Attempt to fill in missing blockgroups.")
+	fakeDevExtFlag  *bool   = flag.Bool("fakeDE", false, "Attempt to fill in missing device extents.")
 	wg              sync.WaitGroup
 	wfile           *os.File
 	rc              *RecoverControl
 	root            *BtrfsRoot
+)
+
+const (
+	// verbosity
+	V_NONE int = iota
+	V_BASIC
+	V_DETAILS
+	V_EVERYTHING
+	V_DEBUG
 )
 
 type treeBlock struct {
@@ -70,13 +81,15 @@ func main() {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel() // Cancel ctx as soon as
 	flag.Parse()   // Scan the arguments list
-	if *versionFlag {
-		fmt.Println("Version:", APP_VERSION)
+	if *verboseFlag > V_BASIC {
+		fmt.Fprintln(os.Stderr, "Version:", APP_VERSION)
 	}
 	// create a new file to get list of valid bytnrs for this run
 	if len(*writeBytenrFlag) != 0 {
 		var err error
-		fmt.Fprintf(os.Stderr,"\nWriting new bytenr file to %v\n", *writeBytenrFlag)
+		if *verboseFlag > V_BASIC {
+			fmt.Fprintf(os.Stderr, "\nWriting new bytenr file to %v\n", *writeBytenrFlag)
+		}
 		wfile, err = os.Create(*writeBytenrFlag)
 		if err != nil {
 			log.Fatal(err)
@@ -109,13 +122,17 @@ func main() {
 		for bytenr := start; bytenr < end; bytenr += size {
 			select {
 			case <-ctx.Done():
-				fmt.Fprintf(os.Stderr,"Done countFromParams\n")
+				if *verboseFlag > V_EVERYTHING {
+					fmt.Fprintf(os.Stderr, "Done countFromParams\n")
+				}
 				break countFromParams
 			case bytenrChan <- bytenr:
 				i++
 			}
 		}
-		fmt.Fprintf(os.Stderr,"Read %d uint64s\n", i)
+		if *verboseFlag > V_EVERYTHING {
+			fmt.Fprintf(os.Stderr, "Read %d uint64s\n", i)
+		}
 	} else {
 		file, err := os.Open(*bytenrFlag)
 		if err != nil {
@@ -132,7 +149,9 @@ func main() {
 			}
 			select {
 			case <-ctx.Done():
-				fmt.Fprintf(os.Stderr,"Done readFromFile\n")
+				if *verboseFlag > V_EVERYTHING {
+					fmt.Fprintf(os.Stderr, "Done readFromFile\n")
+				}
 				break readFromFile
 			case bytenrChan <- bytenr:
 			}
@@ -140,82 +159,107 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			fmt.Println(err)
 		}
-		fmt.Fprintf(os.Stderr,"Read %d uint64s\n", i)
+		if *verboseFlag > V_EVERYTHING {
+			fmt.Fprintf(os.Stderr, "Read %d uint64s\n", i)
+		}
 	}
 	close(bytenrChan)
 	wg.Wait()
+	if *fakeBGFlag {
+		// generate fake block group entries between missing records
+		FakeBlockGroups(&rc.Bg)
+	}
+	if *fakeDevExtFlag {
+		// generate fake device extents between missing records
+		FakeDevExts(&rc.Devext)
+	}
 	CheckChunks(rc.Chunk, &rc.Bg, &rc.Devext, rc.GoodChunks, rc.BadChunks, false)
 
 	BtrfsRecoverChunks(rc)
 	BuildDeviceMapsByChunkRecords(rc, root)
-	fmt.Fprintf(os.Stderr,"Bad Chunks: %d\n", rc.BadChunks.Len())
-	fmt.Fprintf(os.Stderr,"Good Chunks: %d\n", rc.GoodChunks.Len())
-	fmt.Fprintf(os.Stderr,"Urepaired Chunks: %d\n", rc.UnrepairedChunks.Len())
-	fmt.Fprintf(os.Stderr,"Device Orphans: %d\n", rc.Devext.DeviceOrphans.Len())
-	fmt.Fprintf(os.Stderr,"Chunk Orphans: %d\n", rc.Devext.ChunkOrphans.Len())
-
-	fmt.Fprintf(os.Stderr,"\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len())
-	//	root.FsInfo.MappingTree.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
-	//		return true
-	//	})
-	//	fmt.Fprintf(os.Stderr,"\nAll %d Extent buffers\n", rc.EbCache.Len())
-	//	rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
-	//		return true
-	//	})
-	fmt.Fprintf(os.Stderr,"\nAll %d Block Groups\n", rc.Bg.Tree.Len())
-	rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-		bg := i.(*BlockGroupRecord)
-		fmt.Fprintf(os.Stderr,"BlockGroup: Cache.id: %d Cache.Start: %d Cache.Size: %d Offset: %d Start: %d Size: %d Type: %d Flags: %d Generation: %d\n",
-			bg.CacheExtent.Objectid,
-			bg.CacheExtent.Start,
-			bg.CacheExtent.Size,
-			bg.Offset,
-			bg.Start,
-			bg.Size,
-			bg.Type,
-			bg.Flags,
-			bg.Generation,
-		)
-		return true
-	})
-	fmt.Fprintf(os.Stderr,"\nAll %d Chunks\n", rc.Chunk.Len())
-	//	rc.Chunk.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-	//		fmt.Fprintf(os.Stderr,"%+v\n", i)
-	//		return true
-	//	})
-	fmt.Fprintf(os.Stderr,"\nAll %d Device Extents\n", rc.Devext.Tree.Len())
-	rc.Devext.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
-		devExt := i.(*DeviceExtentRecord)
-		fmt.Fprintf(os.Stderr,"Devext: Cache.Start: %d Cache.Size: %d Offset: %d Length: %d Start: %d Size: %d Generation: %d\n",
-			devExt.CacheExtent.Start,
-			devExt.CacheExtent.Size,
-			devExt.ChunkOffset,
-			devExt.Length,
-			devExt.Start,
-			devExt.Size,
-			devExt.Generation,
-		)
-		return true
-	})
-	fmt.Fprintf(os.Stderr,"\nAll %d Inodes\n", len(Inodes))
-	//	for k, v := range Inodes {
-	//		fmt.Fprintf(os.Stderr,"%+v %+v\n", k, v)
-	//	}
 	var keys []uint64
 	for k, _ := range Roots {
 		keys = append(keys, k)
 	}
 	sort.Sort(ByInt64(keys))
-	fmt.Fprintf(os.Stderr,"\nAll %d Root\n", len(Roots))
-	for _, i := range keys {
-		fmt.Fprintf(os.Stderr,"%d %+v\n", i, Roots[i])
-	}
-	fmt.Fprintf(os.Stderr,"\nAll Files\n")
-	// file tree
-	for _, i := range keys {
-		depthFirstPrint(i, 256, Roots[i].Name)
+
+	if *verboseFlag > V_BASIC {
+		fmt.Fprintf(os.Stderr, "Bad Chunks: %d\n", rc.BadChunks.Len())
+		fmt.Fprintf(os.Stderr, "Good Chunks: %d\n", rc.GoodChunks.Len())
+		fmt.Fprintf(os.Stderr, "Urepaired Chunks: %d\n", rc.UnrepairedChunks.Len())
+		fmt.Fprintf(os.Stderr, "Device Orphans: %d\n", rc.Devext.DeviceOrphans.Len())
+		fmt.Fprintf(os.Stderr, "Chunk Orphans: %d\n", rc.Devext.ChunkOrphans.Len())
+
+		fmt.Fprintf(os.Stderr, "\nAll %d Mappping records\n", root.FsInfo.MappingTree.Tree.Len())
+		if *verboseFlag > V_DETAILS {
+			root.FsInfo.MappingTree.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+				fmt.Fprintf(os.Stderr, "%+v\n", i)
+				return true
+			})
+			fmt.Fprintf(os.Stderr, "\nAll %d Extent buffers\n", rc.EbCache.Len())
+			rc.EbCache.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+				fmt.Fprintf(os.Stderr, "%+v\n", i)
+				return true
+			})
+		}
+		fmt.Fprintf(os.Stderr, "\nAll %d Block Groups\n", rc.Bg.Tree.Len())
+		if *verboseFlag > V_DETAILS {
+			rc.Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+				bg := i.(*BlockGroupRecord)
+				fmt.Fprintf(os.Stderr, "BlockGroup: Cache.id: %d Cache.Start: %d Cache.Size: %d Offset: %d Start: %d Size: %d Type: %d Flags: %d Generation: %d\n",
+					bg.CacheExtent.Objectid,
+					bg.CacheExtent.Start,
+					bg.CacheExtent.Size,
+					bg.Offset,
+					bg.Start,
+					bg.Size,
+					bg.Type,
+					bg.Flags,
+					bg.Generation,
+				)
+				return true
+			})
+		}
+		fmt.Fprintf(os.Stderr, "\nAll %d Chunks\n", rc.Chunk.Len())
+		if *verboseFlag > V_DETAILS {
+			rc.Chunk.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+				fmt.Fprintf(os.Stderr, "%+v\n", i)
+				return true
+			})
+		}
+		fmt.Fprintf(os.Stderr, "\nAll %d Device Extents\n", rc.Devext.Tree.Len())
+		if *verboseFlag > V_DETAILS {
+			rc.Devext.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+				devExt := i.(*DeviceExtentRecord)
+				fmt.Fprintf(os.Stderr, "Devext: Cache.Start: %d Cache.Size: %d Offset: %d Length: %d Start: %d Size: %d Generation: %d\n",
+					devExt.CacheExtent.Start,
+					devExt.CacheExtent.Size,
+					devExt.ChunkOffset,
+					devExt.Length,
+					devExt.Start,
+					devExt.Size,
+					devExt.Generation,
+				)
+				return true
+			})
+		}
+		fmt.Fprintf(os.Stderr, "\nAll %d Inodes\n", len(Inodes))
+		if *verboseFlag > V_DETAILS {
+			for k, v := range Inodes {
+				fmt.Fprintf(os.Stderr, "%+v %+v\n", k, v)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "\nAll %d Root\n", len(Roots))
+		for _, i := range keys {
+			fmt.Fprintf(os.Stderr, "%d %+v\n", i, Roots[i])
+		}
+		fmt.Fprintf(os.Stderr, "\nAll Files\n")
+		if *verboseFlag > V_DETAILS {
+			// file tree
+			for _, i := range keys {
+				depthFirstPrint(i, 256, Roots[i].Name)
+			}
+		}
 	}
 	// restore
 	if *rootDirFlag != "" {
@@ -223,7 +267,7 @@ func main() {
 			cmd := exec.Command("/usr/bin/btrfs", "subvolume", "create", *rootDirFlag+"/"+Roots[i].Name)
 			err := cmd.Run()
 			if err != nil {
-				fmt.Fprintf(os.Stderr,"cmd.Run: failed %v\n", err)
+				fmt.Fprintf(os.Stderr, "cmd.Run: failed %v\n", err)
 			}
 			syscall.Sync()
 		}
@@ -260,7 +304,7 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 				//				fmt.Fprintf(os.Stderr,"Path: %s Len: %d\n", path, len(Inodes[k].Data))
 				n, err := file.Write(Inodes[k].Data)
 				if err != nil {
-					fmt.Fprintf(os.Stderr,"Write: %s %d %v\n", path, n, err)
+					fmt.Fprintf(os.Stderr, "Write: %s %d %v\n", path, n, err)
 				}
 				fallthrough // just in case
 			case Inodes[k].FileExtentItemsCont != nil:
@@ -280,18 +324,18 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 						bytenr += offset
 					}
 					if err, physical := MapLogical(root.FsInfo.MappingTree.Tree, bytenr); err == nil {
-						fmt.Fprintf(os.Stderr,"MapLogical: %d to %d\n", bytenr, physical)
+						fmt.Fprintf(os.Stderr, "MapLogical: %d to %d\n", bytenr, physical)
 						byteblock := make([]byte, length)
 						ret, err := syscall.Pread(rc.Fd, byteblock, int64(physical))
 						byteblock = byteblock[:ret]
 						if err != nil {
-							fmt.Fprintf(os.Stderr,"Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
+							fmt.Fprintf(os.Stderr, "Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
 							continue
 						} else {
 							if uint64(ret) != length {
-								fmt.Fprintf(os.Stderr,"Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
+								fmt.Fprintf(os.Stderr, "Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
 							} else {
-								fmt.Fprintf(os.Stderr,"Pread: %s %d @%d\n", path, length, physical)
+								fmt.Fprintf(os.Stderr, "Pread: %s %d @%d\n", path, length, physical)
 							}
 						}
 						// total=0;
@@ -307,12 +351,14 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 						//	}
 						n, err := file.WriteAt(byteblock, int64(fileOffset))
 						if err != nil {
-							fmt.Fprintf(os.Stderr,"WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
+							fmt.Fprintf(os.Stderr, "WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
 						} else {
-							fmt.Fprintf(os.Stderr,"Written: %s %d @%d\n", path, n, fileOffset)
+							if *verboseFlag > V_EVERYTHING {
+								fmt.Fprintf(os.Stderr, "Written: %s %d @%d\n", path, n, fileOffset)
+							}
 						}
 					} else {
-						fmt.Fprintf(os.Stderr,"MapLogical: failed %s %d %v\n", path, bytenr, err)
+						fmt.Fprintf(os.Stderr, "MapLogical: failed %s %d %v\n", path, bytenr, err)
 					}
 				}
 			}
@@ -320,7 +366,7 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 			if Inodes[k].InodeItem.Size > 0 {
 				err := file.Truncate(int64(Inodes[k].InodeItem.Size))
 				if err != nil {
-					fmt.Fprintf(os.Stderr,"Truncate: %d %s %v\n", Inodes[k].InodeItem.Size, path, err)
+					fmt.Fprintf(os.Stderr, "Truncate: %d %s %v\n", Inodes[k].InodeItem.Size, path, err)
 				}
 			}
 			file.Chown(int(Inodes[k].InodeItem.Uid), int(Inodes[k].InodeItem.Gid))
@@ -346,7 +392,7 @@ func depthFirstPrint(tree, dirInode uint64, path string) {
 		Inode: dirInode,
 	}
 	path = path + "/" + Inodes[k].Name
-	fmt.Fprintf(os.Stderr,"%s\n", path)
+	fmt.Fprintf(os.Stderr, "%s\n", path)
 	if Inodes[k].DirItems != nil {
 		for child, _ := range Inodes[k].DirItems {
 			depthFirstPrint(tree, child, path)
@@ -378,7 +424,9 @@ loop:
 
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(os.Stderr,"Done byteConsumer\n")
+			if *verboseFlag > V_DETAILS {
+				fmt.Fprintf(os.Stderr, "Done byteConsumer\n")
+			}
 			break loop
 		case bytenr, ok := <-bytenrsChan:
 			//			fmt.Fprintf(os.Stderr,"got byte %08x, staus %v\r", bytenr, ok)
@@ -396,9 +444,11 @@ loop:
 						csumBlockChan <- treeBlock
 					} else {
 						if err != nil {
-							fmt.Println(err)
-							fmt.Fprintf(os.Stderr,"byteConsumer BtrfsReadTreeblock failed %v\n", err)
-							fmt.Fprintf(os.Stderr,"byteConsumer read %d uint64s\n", i)
+							if *verboseFlag > V_EVERYTHING {
+								fmt.Fprintln(os.Stderr, err)
+								fmt.Fprintf(os.Stderr, "byteConsumer BtrfsReadTreeblock failed %v\n", err)
+								fmt.Fprintf(os.Stderr, "byteConsumer read %d uint64s\n", i)
+							}
 							cancel()
 							break loop
 						} else {
@@ -407,8 +457,11 @@ loop:
 					}
 				}
 			} else {
-				fmt.Fprintf(os.Stderr,"\n\n cancel byteConsumer %v\n\n", ok)
-				fmt.Fprintf(os.Stderr,"byteConsumer %d blocks with bad fsid\n", i)
+				if *verboseFlag > V_EVERYTHING {
+
+					fmt.Fprintf(os.Stderr, "\n\n cancel byteConsumer %v\n\n", ok)
+					fmt.Fprintf(os.Stderr, "byteConsumer %d blocks with bad fsid\n", i)
+				}
 				//				cancel()
 				break loop
 			}
@@ -428,7 +481,9 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(os.Stderr,"Done csumByteblock\n")
+			if *verboseFlag > V_EVERYTHING {
+				fmt.Fprintf(os.Stderr, "Done csumByteblock\n")
+			}
 			return
 		case treeBlock, ok := <-in:
 			if ok {
@@ -442,7 +497,7 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 				crc := crc32.Checksum((byteblock)[BTRFS_CSUM_SIZE:], Crc32c)
 				if crc != csum {
 					bytenr := treeBlock.bytenr
-					fmt.Fprintf(os.Stderr,"crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
+					fmt.Fprintf(os.Stderr, "crc32c mismatch @%08x have %08x expected %08x\n", bytenr, csum, crc)
 				} else {
 					if wfile != nil {
 						fmt.Fprintf(wfile, "%d\n", bytenr)
@@ -456,9 +511,11 @@ func csumByteblock(ctx context.Context, cancel context.CancelFunc, in <-chan (tr
 				//		outs=outs+len(out)
 				//		fmt.Fprintf(os.Stderr,"csumByteblock Chan len in: %03.2f out: %03.2f\r",float64(ins)/float64(inc),float64(outs)/float64(outc))
 			} else {
-				fmt.Fprintf(os.Stderr,"\n\n cancel csumByteblock, %v\n\n", ok)
-				fmt.Fprintf(os.Stderr,"csumByteblock: read %d treeblocks\n", i)
-				fmt.Fprintf(os.Stderr,"csumByteblock: last bytenr %d\n", last)
+				if *verboseFlag > V_EVERYTHING {
+					fmt.Fprintf(os.Stderr, "\n\n cancel csumByteblock, %v\n\n", ok)
+					fmt.Fprintf(os.Stderr, "csumByteblock: read %d treeblocks\n", i)
+					fmt.Fprintf(os.Stderr, "csumByteblock: last bytenr %d\n", last)
+				}
 				//				cancel()
 				return
 			}
@@ -477,7 +534,9 @@ func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockc
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(os.Stderr,"Done headerConsumer\n")
+			if *verboseFlag > V_EVERYTHING {
+				fmt.Fprintf(os.Stderr, "Done headerConsumer\n")
+			}
 			return
 		case treeBlock, ok := <-headerBlockchan:
 			if ok {
@@ -486,8 +545,10 @@ func headerConsumer(ctx context.Context, cancel context.CancelFunc, headerBlockc
 				//		fmt.Fprintf(os.Stderr,"from chan treeblock: @%d, %v\n", treeBlock.bytent, treeBlock.byteblock[0:4])
 				detailBlock(&treeBlock, itemBlockChan, rc)
 			} else {
-				fmt.Fprintf(os.Stderr,"\n\n cancel headerConsumer %v\n\n", ok)
-				fmt.Fprintf(os.Stderr,"headerConsumer read %d treeblocks\n", i)
+				if *verboseFlag > V_EVERYTHING {
+					fmt.Fprintf(os.Stderr, "\n\n cancel headerConsumer %v\n\n", ok)
+					fmt.Fprintf(os.Stderr, "headerConsumer read %d treeblocks\n", i)
+				}
 				//				cancel()
 				return
 			}
@@ -505,7 +566,9 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 		i++
 		select {
 		case <-ctx.Done():
-			fmt.Fprintf(os.Stderr,"Done processItems\n")
+			if *verboseFlag > V_EVERYTHING {
+				fmt.Fprintf(os.Stderr, "Done processItems\n")
+			}
 			return
 		case itemBlock, ok := <-itemBlockChan:
 			if ok {
@@ -567,8 +630,10 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					//					}
 				}
 			} else {
-				fmt.Fprintf(os.Stderr,"\n\n cancel processItems %+v\n\n", ok)
-				fmt.Fprintf(os.Stderr,"processItems read %d itemblocks\n", i)
+				if *verboseFlag > V_EVERYTHING {
+					fmt.Fprintf(os.Stderr, "\n\n cancel processItems %+v\n\n", ok)
+					fmt.Fprintf(os.Stderr, "processItems read %d itemblocks\n", i)
+				}
 				//				cancel()
 				return
 			}
@@ -599,7 +664,7 @@ again:
 				exists.CacheExtent.Size != er.CacheExtent.Size ||
 				bytes.Compare(exists.Csum[:], er.Csum[:]) != 0 {
 				//							exists but different
-				fmt.Fprintf(os.Stderr,"detailBlock: Exists but dif %+v\n", er)
+				fmt.Fprintf(os.Stderr, "detailBlock: Exists but dif %+v\n", er)
 				return
 			} else {
 				//					fmt.Fprintf(os.Stderr,"Mirror:%d\r", tree.Len())

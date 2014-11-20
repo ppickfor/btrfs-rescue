@@ -310,8 +310,8 @@ again:
 		 */
 		goto again
 	}
-	bgCache.Tree.InsertNoReplace(rec)
 	rec.List = bgCache.Block_Groups.PushBack(rec)
+	bgCache.Tree.InsertNoReplace(rec)
 }
 
 // MapLogical maps a logical to a physical address
@@ -959,7 +959,7 @@ noExtentRecord:
 	return nil, true
 }
 
-// btrfsRebuildUnorderedChunkStripes rebuild stimple stripes
+// btrfsRebuildUnorderedChunkStripes rebuild simple stripes
 func btrfsRebuildUnorderedChunkStripes(rc *RecoverControl, chunk *ChunkRecord) (error, bool) {
 	for i, item := uint16(0), chunk.Dextents.Front(); item != nil && item.Value != nil && i < chunk.NumStripes; i, item = i+1, item.Next() {
 		devExt := item.Value.(*DeviceExtentRecord)
@@ -1094,6 +1094,72 @@ func btrfsNextStripeLogicalOffset(chunk *ChunkRecord, logical uint64) uint64 {
 	offset *= chunk.StripeLen
 	offset += chunk.StripeLen
 	return offset + chunk.Offset
+}
+
+// fakeBlockGroups generate blockgroups between missing recorsd
+func FakeBlockGroups(Bg *BlockGroupTree) {
+	var oldbg *BlockGroupRecord
+	missing := make([]*BlockGroupRecord, 0)
+	Bg.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		bg := i.(*BlockGroupRecord)
+		if oldbg == nil {
+			oldbg = bg
+		} else {
+			if oldbg.Start+oldbg.Size < bg.Start {
+				// generate missing bgs
+				newbg := *oldbg
+				for start := oldbg.Start + oldbg.Size; start < bg.Start; start += oldbg.Size {
+					newbg.CacheExtent.Start += oldbg.Size
+					newbg.Objectid += oldbg.Size
+					newbg.Generation = 0
+					next := newbg
+					missing = append(missing, &next)
+				}
+			}
+		}
+		oldbg = bg
+		return true
+	})
+	for _, v := range missing {
+		fmt.Fprintf(os.Stderr, "Adding fake block group %+v\n", v)
+		v.List = Bg.Block_Groups.PushBack(v)
+		Bg.Tree.InsertNoReplace(v)
+	}
+	return
+}
+
+// fakeDevExts generate device extents between missing records
+func FakeDevExts(Devext *DeviceExtentTree) {
+	var oldde *DeviceExtentRecord
+	missing := make([]*DeviceExtentRecord, 0)
+	Devext.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		de := i.(*DeviceExtentRecord)
+		if oldde == nil {
+			oldde = de
+		} else {
+			if oldde.Start+oldde.Size < de.Start {
+				// generate missing bgs
+				newde := *oldde
+				for start := oldde.Start + oldde.Size; start < de.Start; start += oldde.Size {
+					newde.CacheExtent.Start += oldde.Size
+					newde.Offset += oldde.Size
+					newde.ChunkOffset += oldde.Size
+					newde.Generation = 0
+					next := newde
+					missing = append(missing, &next)
+				}
+			}
+		}
+		oldde = de
+		return true
+	})
+	for _, v := range missing {
+		fmt.Fprintf(os.Stderr, "Adding fake device extent %+v\n", v)
+		v.ChunkList = Devext.ChunkOrphans.PushBack(v)
+		v.DeviceList = Devext.DeviceOrphans.PushBack(v)
+		Devext.Tree.InsertNoReplace(v)
+	}
+	return
 }
 
 // TODO:
