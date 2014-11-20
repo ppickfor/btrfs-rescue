@@ -880,7 +880,7 @@ package btrfs
 //	if !btrfs.IsSuperBlockAddress(uint64(bytenr)) {
 //		if btrfs.BtrfsReadHeader(rc.Fd, header, bytenr) {
 //			if bytes.Equal(header.Fsid[:], fsid) {
-//				fmt.Printf("Btrfs header @%v:\n%+v\n\n", bytenr, header)
+//				fmt.Fprintf(os.Stderr,"Btrfs header @%v:\n%+v\n\n", bytenr, header)
 //				decodeObjectID(int64(header.Owner))
 //
 //				if ret, items := btrfs.BtrfsReadItems(rc.Fd, header.Nritems, bytenr); ret {
@@ -996,7 +996,7 @@ package btrfs
 //	//		fmt.Println("BTRFS_DEV_ITEMS_OBJECTID")
 //	default:
 //		if (id > 0 && id > btrfs.BTRFS_FIRST_FREE_OBJECTID) || (id < 0 && id < btrfs.BTRFS_LAST_FREE_OBJECTID) {
-//			fmt.Printf("Numbered Object %08x\n", uint64(id))
+//			fmt.Fprintf(os.Stderr,"Numbered Object %08x\n", uint64(id))
 //		} else {
 //			fmt.Println("UNKNOWN OBJECTID")
 //

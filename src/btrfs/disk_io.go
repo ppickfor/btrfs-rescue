@@ -101,20 +101,20 @@ func btrfsReadDevSuper(
 	 */
 
 	for i := 0; i < maxSuper; i++ {
-		fmt.Printf("i: %v\n", i)
+		fmt.Fprintf(os.Stderr, "i: %v\n", i)
 
 		bytenr = int64(BtrfsSbOffset(i))
-		fmt.Printf("bytenr: %v\n", bytenr)
+		fmt.Fprintf(os.Stderr, "bytenr: %v\n", bytenr)
 		ret, _ := syscall.Pread(fd, bytebuf, bytenr)
-		//fmt.Printf("err: %v, ret: %v. bytebuf: %v\n", err, ret, bytebuf)
+		//fmt.Fprintf(os.Stderr,"err: %v, ret: %v. bytebuf: %v\n", err, ret, bytebuf)
 		if ret < size {
 			break
 		}
 		bytebr = bytes.NewReader(bytebuf)
 		_ = binary.Read(bytebr, binary.LittleEndian, buf)
 		if buf.Bytenr != uint64(bytenr) {
-			fmt.Printf("bad bytent: should be %v not %v\n", bytenr, buf.Bytenr)
-			fmt.Printf("Super block:\n%+v\n", buf)
+			fmt.Fprintf(os.Stderr, "bad bytent: should be %v not %v\n", bytenr, buf.Bytenr)
+			fmt.Fprintf(os.Stderr, "Super block:\n%+v\n", buf)
 			continue
 		}
 
@@ -123,7 +123,7 @@ func btrfsReadDevSuper(
 			return false
 		}
 		if buf.Magic != BTRFS_MAGIC {
-			fmt.Printf("bad magic %x not %x\n", buf.Magic, BTRFS_MAGIC)
+			fmt.Fprintf(os.Stderr, "bad magic %x not %x\n", buf.Magic, BTRFS_MAGIC)
 			continue
 		}
 
@@ -137,7 +137,7 @@ func btrfsReadDevSuper(
 			 * its backups) contain data of different
 			 * filesystems -> the super cannot be trusted
 			 */
-			fmt.Printf("bad fsid %x not %x\n", fsid, buf.Fsid)
+			fmt.Fprintf(os.Stderr, "bad fsid %x not %x\n", fsid, buf.Fsid)
 			continue
 		}
 		if !checkSuper(fd, uint64(bytenr), buf) {
@@ -146,7 +146,7 @@ func btrfsReadDevSuper(
 
 		if buf.Generation > transid {
 			*sb = *buf
-			//			fmt.Printf("buf: %+v\n\n\nsb inside: %+v\n", buf, sb)
+			//			fmt.Fprintf(os.Stderr,"buf: %+v\n\n\nsb inside: %+v\n", buf, sb)
 			transid = buf.Generation
 		}
 	}
@@ -198,10 +198,10 @@ func checkSuper(fd int, bytenr uint64, sb *BtrfsSuperBlock) bool {
 
 	switch {
 	case sb.Bytenr != bytenr:
-		fmt.Printf("Bytenr mismatch calculated %v have %v\n", sb.Bytenr, bytenr)
+		fmt.Fprintf(os.Stderr, "Bytenr mismatch calculated %v have %v\n", sb.Bytenr, bytenr)
 		return false
 	case sb.Magic != BTRFS_MAGIC:
-		fmt.Printf("Magic mismatch calculated %v have %v\n", sb.Magic, BTRFS_MAGIC)
+		fmt.Fprintf(os.Stderr, "Magic mismatch calculated %v have %v\n", sb.Magic, BTRFS_MAGIC)
 		return false
 	}
 	var (
@@ -209,11 +209,11 @@ func checkSuper(fd int, bytenr uint64, sb *BtrfsSuperBlock) bool {
 		//		crc  uint32 = uint32(0)
 		csum uint32
 	)
-	fmt.Printf("Reading crc32c\n")
+	fmt.Fprintf(os.Stderr, "Reading crc32c\n")
 	bytebr := bytes.NewReader(sb.Csum[:])
 	binary.Read(bytebr, binary.LittleEndian, &csum)
 
-	fmt.Printf("Calculating crc32c\n")
+	fmt.Fprintf(os.Stderr, "Calculating crc32c\n")
 
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, *sb)
@@ -223,17 +223,17 @@ func checkSuper(fd int, bytenr uint64, sb *BtrfsSuperBlock) bool {
 	mybytes := make([]byte, 4096)
 	ret, _ := syscall.Pread(fd, mybytes, int64(bytenr))
 	if ret != 4096 {
-		fmt.Printf("Pread failed\n")
+		fmt.Fprintf(os.Stderr, "Pread failed\n")
 
 	}
 
 	crc = crc32.Checksum(mybytes[BTRFS_CSUM_SIZE:], Crc32c)
 
 	if csum != crc {
-		fmt.Printf("Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum, len(mybytes), mybytes)
+		fmt.Fprintf(os.Stderr, "Crc mismatch calculated %08x have %08x\nLen bytes: %v\n%v\n", crc, csum, len(mybytes), mybytes)
 		return true
 	}
-	fmt.Printf("Crc match calculated %08x have %08x\n", crc, csum)
+	fmt.Fprintf(os.Stderr, "Crc match calculated %08x have %08x\n", crc, csum)
 	return true
 
 }
@@ -250,7 +250,7 @@ func BtrfsReadTreeblock(fd int, bytenr uint64, size uint64, fsid []byte, byteblo
 	if ret < int(size) {
 		return false, errors.New("Pread: not all bytes read")
 	}
-	//	fmt.Printf("byteblock: %v\n", byteblock)
+	//	fmt.Fprintf(os.Stderr,"byteblock: %v\n", byteblock)
 	if !bytes.Equal((*byteblock)[32:32+16], fsid) {
 		return false, nil
 	}

@@ -3,6 +3,7 @@ package btrfs
 import (
 	"fmt"
 	"math"
+	"os"
 )
 
 func printDirItemType(di *BtrfsDirItem) {
@@ -10,31 +11,31 @@ func printDirItemType(di *BtrfsDirItem) {
 
 	switch Type {
 	case BTRFS_FT_REG_FILE:
-		fmt.Printf("FILE")
+		fmt.Fprintf(os.Stderr, "FILE")
 		break
 	case BTRFS_FT_DIR:
-		fmt.Printf("DIR")
+		fmt.Fprintf(os.Stderr, "DIR")
 		break
 	case BTRFS_FT_CHRDEV:
-		fmt.Printf("CHRDEV")
+		fmt.Fprintf(os.Stderr, "CHRDEV")
 		break
 	case BTRFS_FT_BLKDEV:
-		fmt.Printf("BLKDEV")
+		fmt.Fprintf(os.Stderr, "BLKDEV")
 		break
 	case BTRFS_FT_FIFO:
-		fmt.Printf("FIFO")
+		fmt.Fprintf(os.Stderr, "FIFO")
 		break
 	case BTRFS_FT_SOCK:
-		fmt.Printf("SOCK")
+		fmt.Fprintf(os.Stderr, "SOCK")
 		break
 	case BTRFS_FT_SYMLINK:
-		fmt.Printf("SYMLINK")
+		fmt.Fprintf(os.Stderr, "SYMLINK")
 		break
 	case BTRFS_FT_XATTR:
-		fmt.Printf("XATTR")
+		fmt.Fprintf(os.Stderr, "XATTR")
 		break
 	default:
-		fmt.Printf("%d", Type)
+		fmt.Fprintf(os.Stderr, "%d", Type)
 	}
 }
 func printInodeRefItem() {
@@ -64,209 +65,209 @@ func printInodeRefItem() {
 func printObjectid(objectid uint64, Type uint8) {
 	switch Type {
 	case BTRFS_DEV_EXTENT_KEY:
-		fmt.Printf("%d", objectid) /* device id */
+		fmt.Fprintf(os.Stderr, "%d", objectid) /* device id */
 		return
 	case BTRFS_QGROUP_RELATION_KEY:
-		fmt.Printf("%d/%d", objectid>>48,
+		fmt.Fprintf(os.Stderr, "%d/%d", objectid>>48,
 			objectid&((1<<48)-1))
 		return
 	case BTRFS_UUID_KEY_SUBVOL, BTRFS_UUID_KEY_RECEIVED_SUBVOL:
-		fmt.Printf("0x%d", objectid)
+		fmt.Fprintf(os.Stderr, "0x%d", objectid)
 		return
 	}
 
 	switch objectid {
 	case BTRFS_ROOT_TREE_OBJECTID:
 		if Type == BTRFS_DEV_ITEM_KEY {
-			fmt.Printf("DEV_ITEMS")
+			fmt.Fprintf(os.Stderr, "DEV_ITEMS")
 		} else {
-			fmt.Printf("ROOT_TREE")
+			fmt.Fprintf(os.Stderr, "ROOT_TREE")
 		}
 		break
 	case BTRFS_EXTENT_TREE_OBJECTID:
-		fmt.Printf("EXTENT_TREE")
+		fmt.Fprintf(os.Stderr, "EXTENT_TREE")
 		break
 	case BTRFS_CHUNK_TREE_OBJECTID:
-		fmt.Printf("CHUNK_TREE")
+		fmt.Fprintf(os.Stderr, "CHUNK_TREE")
 		break
 	case BTRFS_DEV_TREE_OBJECTID:
-		fmt.Printf("DEV_TREE")
+		fmt.Fprintf(os.Stderr, "DEV_TREE")
 		break
 	case BTRFS_FS_TREE_OBJECTID:
-		fmt.Printf("FS_TREE")
+		fmt.Fprintf(os.Stderr, "FS_TREE")
 		break
 	case BTRFS_ROOT_TREE_DIR_OBJECTID:
-		fmt.Printf("ROOT_TREE_DIR")
+		fmt.Fprintf(os.Stderr, "ROOT_TREE_DIR")
 		break
 	case BTRFS_CSUM_TREE_OBJECTID:
-		fmt.Printf("CSUM_TREE")
+		fmt.Fprintf(os.Stderr, "CSUM_TREE")
 		break
 	case BTRFS_BALANCE_OBJECTID:
-		fmt.Printf("BALANCE")
+		fmt.Fprintf(os.Stderr, "BALANCE")
 		break
 	case BTRFS_ORPHAN_OBJECTID:
-		fmt.Printf("ORPHAN")
+		fmt.Fprintf(os.Stderr, "ORPHAN")
 		break
 	case BTRFS_TREE_LOG_OBJECTID:
-		fmt.Printf("TREE_LOG")
+		fmt.Fprintf(os.Stderr, "TREE_LOG")
 		break
 	case BTRFS_TREE_LOG_FIXUP_OBJECTID:
-		fmt.Printf("LOG_FIXUP")
+		fmt.Fprintf(os.Stderr, "LOG_FIXUP")
 		break
 	case BTRFS_TREE_RELOC_OBJECTID:
-		fmt.Printf("TREE_RELOC")
+		fmt.Fprintf(os.Stderr, "TREE_RELOC")
 		break
 	case BTRFS_DATA_RELOC_TREE_OBJECTID:
-		fmt.Printf("DATA_RELOC_TREE")
+		fmt.Fprintf(os.Stderr, "DATA_RELOC_TREE")
 		break
 	case BTRFS_EXTENT_CSUM_OBJECTID:
-		fmt.Printf("EXTENT_CSUM")
+		fmt.Fprintf(os.Stderr, "EXTENT_CSUM")
 		break
 	case BTRFS_FREE_SPACE_OBJECTID:
-		fmt.Printf("FREE_SPACE")
+		fmt.Fprintf(os.Stderr, "FREE_SPACE")
 		break
 	case BTRFS_FREE_INO_OBJECTID:
-		fmt.Printf("FREE_INO")
+		fmt.Fprintf(os.Stderr, "FREE_INO")
 		break
 	case BTRFS_QUOTA_TREE_OBJECTID:
-		fmt.Printf("QUOTA_TREE")
+		fmt.Fprintf(os.Stderr, "QUOTA_TREE")
 		break
 	case BTRFS_UUID_TREE_OBJECTID:
-		fmt.Printf("UUID_TREE")
+		fmt.Fprintf(os.Stderr, "UUID_TREE")
 		break
 	case BTRFS_MULTIPLE_OBJECTIDS:
-		fmt.Printf("MULTIPLE")
+		fmt.Fprintf(os.Stderr, "MULTIPLE")
 		break
 	case -1 & math.MaxUint64:
-		fmt.Printf("-1")
+		fmt.Fprintf(os.Stderr, "-1")
 		break
 	case BTRFS_FIRST_CHUNK_TREE_OBJECTID:
 		if Type == BTRFS_CHUNK_ITEM_KEY {
-			fmt.Printf("FIRST_CHUNK_TREE")
+			fmt.Fprintf(os.Stderr, "FIRST_CHUNK_TREE")
 			break
 		}
 		/* fall-thru */
 	default:
-		fmt.Printf("%d", objectid)
+		fmt.Fprintf(os.Stderr, "%d", objectid)
 	}
 }
 func printKeyType(objectid uint64, Type uint8) {
 	if Type == 0 && objectid == BTRFS_FREE_SPACE_OBJECTID {
-		fmt.Printf("UNTYPED")
+		fmt.Fprintf(os.Stderr, "UNTYPED")
 		return
 	}
 
 	switch Type {
 	case BTRFS_INODE_ITEM_KEY:
-		fmt.Printf("INODE_ITEM")
+		fmt.Fprintf(os.Stderr, "INODE_ITEM")
 		break
 	case BTRFS_INODE_REF_KEY:
-		fmt.Printf("INODE_REF")
+		fmt.Fprintf(os.Stderr, "INODE_REF")
 		break
 	case BTRFS_INODE_EXTREF_KEY:
-		fmt.Printf("INODE_EXTREF")
+		fmt.Fprintf(os.Stderr, "INODE_EXTREF")
 		break
 	case BTRFS_DIR_ITEM_KEY:
-		fmt.Printf("DIR_ITEM")
+		fmt.Fprintf(os.Stderr, "DIR_ITEM")
 		break
 	case BTRFS_DIR_INDEX_KEY:
-		fmt.Printf("DIR_INDEX")
+		fmt.Fprintf(os.Stderr, "DIR_INDEX")
 		break
 	case BTRFS_DIR_LOG_ITEM_KEY:
-		fmt.Printf("DIR_LOG_ITEM")
+		fmt.Fprintf(os.Stderr, "DIR_LOG_ITEM")
 		break
 	case BTRFS_DIR_LOG_INDEX_KEY:
-		fmt.Printf("DIR_LOG_INDEX")
+		fmt.Fprintf(os.Stderr, "DIR_LOG_INDEX")
 		break
 	case BTRFS_XATTR_ITEM_KEY:
-		fmt.Printf("XATTR_ITEM")
+		fmt.Fprintf(os.Stderr, "XATTR_ITEM")
 		break
 	case BTRFS_ORPHAN_ITEM_KEY:
-		fmt.Printf("ORPHAN_ITEM")
+		fmt.Fprintf(os.Stderr, "ORPHAN_ITEM")
 		break
 	case BTRFS_ROOT_ITEM_KEY:
-		fmt.Printf("ROOT_ITEM")
+		fmt.Fprintf(os.Stderr, "ROOT_ITEM")
 		break
 	case BTRFS_ROOT_REF_KEY:
-		fmt.Printf("ROOT_REF")
+		fmt.Fprintf(os.Stderr, "ROOT_REF")
 		break
 	case BTRFS_ROOT_BACKREF_KEY:
-		fmt.Printf("ROOT_BACKREF")
+		fmt.Fprintf(os.Stderr, "ROOT_BACKREF")
 		break
 	case BTRFS_EXTENT_ITEM_KEY:
-		fmt.Printf("EXTENT_ITEM")
+		fmt.Fprintf(os.Stderr, "EXTENT_ITEM")
 		break
 	case BTRFS_METADATA_ITEM_KEY:
-		fmt.Printf("METADATA_ITEM")
+		fmt.Fprintf(os.Stderr, "METADATA_ITEM")
 		break
 	case BTRFS_TREE_BLOCK_REF_KEY:
-		fmt.Printf("TREE_BLOCK_REF")
+		fmt.Fprintf(os.Stderr, "TREE_BLOCK_REF")
 		break
 	case BTRFS_SHARED_BLOCK_REF_KEY:
-		fmt.Printf("SHARED_BLOCK_REF")
+		fmt.Fprintf(os.Stderr, "SHARED_BLOCK_REF")
 		break
 	case BTRFS_EXTENT_DATA_REF_KEY:
-		fmt.Printf("EXTENT_DATA_REF")
+		fmt.Fprintf(os.Stderr, "EXTENT_DATA_REF")
 		break
 	case BTRFS_SHARED_DATA_REF_KEY:
-		fmt.Printf("SHARED_DATA_REF")
+		fmt.Fprintf(os.Stderr, "SHARED_DATA_REF")
 		break
 	case BTRFS_EXTENT_REF_V0_KEY:
-		fmt.Printf("EXTENT_REF_V0")
+		fmt.Fprintf(os.Stderr, "EXTENT_REF_V0")
 		break
 	case BTRFS_CSUM_ITEM_KEY:
-		fmt.Printf("CSUM_ITEM")
+		fmt.Fprintf(os.Stderr, "CSUM_ITEM")
 		break
 	case BTRFS_EXTENT_CSUM_KEY:
-		fmt.Printf("EXTENT_CSUM")
+		fmt.Fprintf(os.Stderr, "EXTENT_CSUM")
 		break
 	case BTRFS_EXTENT_DATA_KEY:
-		fmt.Printf("EXTENT_DATA")
+		fmt.Fprintf(os.Stderr, "EXTENT_DATA")
 		break
 	case BTRFS_BLOCK_GROUP_ITEM_KEY:
-		fmt.Printf("BLOCK_GROUP_ITEM")
+		fmt.Fprintf(os.Stderr, "BLOCK_GROUP_ITEM")
 		break
 	case BTRFS_CHUNK_ITEM_KEY:
-		fmt.Printf("CHUNK_ITEM")
+		fmt.Fprintf(os.Stderr, "CHUNK_ITEM")
 		break
 	case BTRFS_DEV_ITEM_KEY:
-		fmt.Printf("DEV_ITEM")
+		fmt.Fprintf(os.Stderr, "DEV_ITEM")
 		break
 	case BTRFS_DEV_EXTENT_KEY:
-		fmt.Printf("DEV_EXTENT")
+		fmt.Fprintf(os.Stderr, "DEV_EXTENT")
 		break
 	case BTRFS_BALANCE_ITEM_KEY:
-		fmt.Printf("BALANCE_ITEM")
+		fmt.Fprintf(os.Stderr, "BALANCE_ITEM")
 		break
 	case BTRFS_DEV_REPLACE_KEY:
-		fmt.Printf("DEV_REPLACE_ITEM")
+		fmt.Fprintf(os.Stderr, "DEV_REPLACE_ITEM")
 		break
 	case BTRFS_STRING_ITEM_KEY:
-		fmt.Printf("STRING_ITEM")
+		fmt.Fprintf(os.Stderr, "STRING_ITEM")
 		break
 	case BTRFS_QGROUP_STATUS_KEY:
-		fmt.Printf("BTRFS_STATUS_KEY")
+		fmt.Fprintf(os.Stderr, "BTRFS_STATUS_KEY")
 		break
 	case BTRFS_QGROUP_RELATION_KEY:
-		fmt.Printf("BTRFS_QGROUP_RELATION_KEY")
+		fmt.Fprintf(os.Stderr, "BTRFS_QGROUP_RELATION_KEY")
 		break
 	case BTRFS_QGROUP_INFO_KEY:
-		fmt.Printf("BTRFS_QGROUP_INFO_KEY")
+		fmt.Fprintf(os.Stderr, "BTRFS_QGROUP_INFO_KEY")
 		break
 	case BTRFS_QGROUP_LIMIT_KEY:
-		fmt.Printf("BTRFS_QGROUP_LIMIT_KEY")
+		fmt.Fprintf(os.Stderr, "BTRFS_QGROUP_LIMIT_KEY")
 		break
 	case BTRFS_DEV_STATS_KEY:
-		fmt.Printf("DEV_STATS_ITEM")
+		fmt.Fprintf(os.Stderr, "DEV_STATS_ITEM")
 		break
 	case BTRFS_UUID_KEY_SUBVOL:
-		fmt.Printf("BTRFS_UUID_KEY_SUBVOL")
+		fmt.Fprintf(os.Stderr, "BTRFS_UUID_KEY_SUBVOL")
 		break
 	case BTRFS_UUID_KEY_RECEIVED_SUBVOL:
-		fmt.Printf("BTRFS_UUID_KEY_RECEIVED_SUBVOL")
+		fmt.Fprintf(os.Stderr, "BTRFS_UUID_KEY_RECEIVED_SUBVOL")
 		break
 	default:
-		fmt.Printf("UNKNOWN.%d", Type)
+		fmt.Fprintf(os.Stderr, "UNKNOWN.%d", Type)
 	}
 }
 func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
@@ -274,23 +275,23 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 	Type := diskKey.Type
 	offset := diskKey.Offset
 
-	fmt.Printf("key (")
+	fmt.Fprintf(os.Stderr, "key (")
 	printObjectid(objectid, Type)
-	fmt.Printf(" ")
+	fmt.Fprintf(os.Stderr, " ")
 	printKeyType(objectid, Type)
 	switch Type {
 	case BTRFS_QGROUP_RELATION_KEY, BTRFS_QGROUP_INFO_KEY, BTRFS_QGROUP_LIMIT_KEY:
-		fmt.Printf(" %d/%d)", (offset >> 48),
+		fmt.Fprintf(os.Stderr, " %d/%d)", (offset >> 48),
 			(offset & ((1 << 48) - 1)))
 		break
 	case BTRFS_UUID_KEY_SUBVOL, BTRFS_UUID_KEY_RECEIVED_SUBVOL:
-		fmt.Printf(" 0x%d)", offset)
+		fmt.Fprintf(os.Stderr, " 0x%d)", offset)
 		break
 	default:
 		if offset == -1&math.MaxUint64 {
-			fmt.Printf(" -1)")
+			fmt.Fprintf(os.Stderr, " -1)")
 		} else {
-			fmt.Printf(" %d)", offset)
+			fmt.Fprintf(os.Stderr, " %d)", offset)
 		}
 		break
 	}
@@ -320,7 +321,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 ////	u32 type
 ////	char bg_flags_str[32]
 //
-////	fmt.Printf("leaf %d items %d free space %d generation %d owner %d\n",
+////	fmt.Fprintf(os.Stderr,"leaf %d items %d free space %d generation %d owner %d\n",
 ////		btrfs_header_bytenr(l), nr,
 ////		btrfs_leaf_free_space(root, l),
 ////		btrfs_header_generation(l),
@@ -333,9 +334,9 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 ////		btrfs_item_key(l, &disk_key, i)
 ////		objectid = btrfs_disk_key_objectid(&disk_key)
 ////		Type = btrfs_disk_key_type(&disk_key)
-//		fmt.Printf("\titem %d ", i)
+//		fmt.Fprintf(os.Stderr,"\titem %d ", i)
 //		btrfs_print_key(&disk_key)
-//		fmt.Printf(" itemoff %d itemsize %d\n",
+//		fmt.Fprintf(os.Stderr," itemoff %d itemsize %d\n",
 //			btrfs_item_offset(l, item),
 //			btrfs_item_size(l, item))
 //
@@ -346,7 +347,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		switch (Type) {
 //		case BTRFS_INODE_ITEM_KEY:
 ////			ii = btrfs_item_ptr(l, i, struct btrfs_inode_item)
-//			fmt.Printf("\t\tinode generation %d transid %d size %d block group %d mode %o links %u uid %u gid %u rdev %d flags 0x%llx\n",
+//			fmt.Fprintf(os.Stderr,"\t\tinode generation %d transid %d size %d block group %d mode %o links %u uid %u gid %u rdev %d flags 0x%llx\n",
 //			       btrfs_inode_generation(l, ii),
 //			       btrfs_inode_transid(l, ii),
 //			       btrfs_inode_size(l, ii),
@@ -375,11 +376,11 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_DIR_LOG_INDEX_KEY:
 //		case BTRFS_DIR_LOG_ITEM_KEY:
 ////			dlog = btrfs_item_ptr(l, i, struct btrfs_dir_log_item)
-//			fmt.Printf("\t\tdir log end %Lu\n",
+//			fmt.Fprintf(os.Stderr,"\t\tdir log end %Lu\n",
 //			       btrfs_dir_log_end(l, dlog))
 //		       break
 //		case BTRFS_ORPHAN_ITEM_KEY:
-//			fmt.Printf("\t\torphan item\n")
+//			fmt.Fprintf(os.Stderr,"\t\torphan item\n")
 //			break
 //		case BTRFS_ROOT_ITEM_KEY:
 //			print_root(l, i)
@@ -397,14 +398,14 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //			print_extent_item(l, i, 1)
 //			break
 //		case BTRFS_TREE_BLOCK_REF_KEY:
-//			fmt.Printf("\t\ttree block backref\n")
+//			fmt.Fprintf(os.Stderr,"\t\ttree block backref\n")
 //			break
 //		case BTRFS_SHARED_BLOCK_REF_KEY:
-//			fmt.Printf("\t\tshared block backref\n")
+//			fmt.Fprintf(os.Stderr,"\t\tshared block backref\n")
 //			break
 //		case BTRFS_EXTENT_DATA_REF_KEY:
 ////			dref = btrfs_item_ptr(l, i, struct btrfs_extent_data_ref)
-//			fmt.Printf("\t\textent data backref root %d objectid %d offset %d count %u\n",
+//			fmt.Fprintf(os.Stderr,"\t\textent data backref root %d objectid %d offset %d count %u\n",
 //			       btrfs_extent_data_ref_root(l, dref),
 //			       btrfs_extent_data_ref_objectid(l, dref),
 //			       btrfs_extent_data_ref_offset(l, dref),
@@ -412,7 +413,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //			break
 //		case BTRFS_SHARED_DATA_REF_KEY:
 ////			sref = btrfs_item_ptr(l, i, struct btrfs_shared_data_ref)
-//			fmt.Printf("\t\tshared data backref count %u\n",
+//			fmt.Fprintf(os.Stderr,"\t\tshared data backref count %u\n",
 //			       btrfs_shared_data_ref_count(l, sref))
 //			break
 //		case BTRFS_EXTENT_REF_V0_KEY:
@@ -421,10 +422,10 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //
 //			break
 //		case BTRFS_CSUM_ITEM_KEY:
-//			fmt.Printf("\t\tcsum item\n")
+//			fmt.Fprintf(os.Stderr,"\t\tcsum item\n")
 //			break
 //		case BTRFS_EXTENT_CSUM_KEY:
-//			fmt.Printf("\t\textent csum item\n")
+//			fmt.Fprintf(os.Stderr,"\t\textent csum item\n")
 //			break
 //		case BTRFS_EXTENT_DATA_KEY:
 ////			fi = btrfs_item_ptr(l, i,
@@ -439,7 +440,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //			memset(bg_flags_str, 0, sizeof(bg_flags_str))
 //			bg_flags_to_str(btrfs_block_group_flags(&bg_item),
 //					bg_flags_str)
-//			fmt.Printf("\t\tblock group used %d chunk_objectid %d flags %s\n",
+//			fmt.Fprintf(os.Stderr,"\t\tblock group used %d chunk_objectid %d flags %s\n",
 //			       btrfs_block_group_used(&bg_item),
 //			       btrfs_block_group_chunk_objectid(&bg_item),
 //			       bg_flags_str)
@@ -454,7 +455,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_DEV_EXTENT_KEY:
 ////			dev_extent = btrfs_item_ptr(l, i,
 ////						    struct btrfs_dev_extent)
-//			fmt.Printf("\t\tdev extent chunk_tree %d\n\t\tchunk objectid %d chunk offset %d length %d\n",
+//			fmt.Fprintf(os.Stderr,"\t\tdev extent chunk_tree %d\n\t\tchunk objectid %d chunk offset %d length %d\n",
 //
 //			       btrfs_dev_extent_chunk_tree(l, dev_extent),
 //
@@ -467,7 +468,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_QGROUP_STATUS_KEY:
 ////			qg_status = btrfs_item_ptr(l, i,
 ////					struct btrfs_qgroup_status_item)
-//			fmt.Printf("\t\tversion %d generation %d flags %#llx scan %lld\n",
+//			fmt.Fprintf(os.Stderr,"\t\tversion %d generation %d flags %#llx scan %lld\n",
 //
 //				btrfs_qgroup_status_version(l, qg_status),
 //
@@ -482,7 +483,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_QGROUP_INFO_KEY:
 ////			qg_info = btrfs_item_ptr(l, i,
 ////						 struct btrfs_qgroup_info_item)
-//			fmt.Printf("\t\tgeneration %d\n\t\treferenced %d referenced compressed %d\n\t\texclusive %d exclusive compressed %d\n",
+//			fmt.Fprintf(os.Stderr,"\t\tgeneration %d\n\t\treferenced %d referenced compressed %d\n\t\texclusive %d exclusive compressed %d\n",
 //
 //			       btrfs_qgroup_info_generation(l, qg_info),
 //
@@ -499,7 +500,7 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_QGROUP_LIMIT_KEY:
 ////			qg_limit = btrfs_item_ptr(l, i,
 ////					 struct btrfs_qgroup_limit_item)
-//			fmt.Printf("\t\tflags %llx\n\t\tmax referenced %lld max exclusive %lld\n\t\trsv referenced %lld rsv exclusive %lld\n",
+//			fmt.Fprintf(os.Stderr,"\t\tflags %llx\n\t\tmax referenced %lld max exclusive %lld\n\t\trsv referenced %lld rsv exclusive %lld\n",
 //
 //			       btrfs_qgroup_limit_flags(l, qg_limit),
 //
@@ -519,10 +520,10 @@ func BtrfsPrintKey(diskKey *BtrfsDiskKey) {
 //		case BTRFS_STRING_ITEM_KEY:
 //			/* dirty, but it's simple */
 ////			str = l->data + btrfs_item_ptr_offset(l, i)
-//			fmt.Printf("\t\titem data %.*s\n", btrfs_item_size(l, item), str)
+//			fmt.Fprintf(os.Stderr,"\t\titem data %.*s\n", btrfs_item_size(l, item), str)
 //			break
 //		case BTRFS_DEV_STATS_KEY:
-//			fmt.Printf("\t\tdevice stats\n")
+//			fmt.Fprintf(os.Stderr,"\t\tdevice stats\n")
 //			break
 //		}
 //		fflush(stdout)

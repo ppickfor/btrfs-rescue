@@ -21,7 +21,7 @@ func ExtractMetadataRecord(rc *RecoverControl, generation uint64, items []BtrfsI
 		switch item.Key.Type {
 		case BTRFS_BLOCK_GROUP_ITEM_KEY:
 			//			pthreadMutexLock(&rc->rcLock);
-			//			fmt.Printf("BLOCK Group Item: %+v\n", &leaf.Items[i])
+			//			fmt.Fprintf(os.Stderr,"BLOCK Group Item: %+v\n", &leaf.Items[i])
 			processBlockGroupItem(&rc.Bg, generation, &item, itemBuf)
 			//			pthreadMutexUnlock(&rc->rcLock);
 			//			break;
@@ -70,8 +70,8 @@ func ProcessCsumItem(rootRefItemCache *llrb.LLRB, owner uint64, item *BtrfsItem,
 	bytereader := bytes.NewReader(itemPtr)
 	//	csumItem := new(BtrfsCsumItem)
 	_ = binary.Read(bytereader, binary.LittleEndian, nCsums)
-	fmt.Printf("csumItem owner: %d key: %+v\n", owner, item)
-	fmt.Printf("csumItem value %+v\n", csums)
+	fmt.Fprintf(os.Stderr, "csumItem owner: %d key: %+v\n", owner, item)
+	fmt.Fprintf(os.Stderr, "csumItem value %+v\n", csums)
 }
 
 // ProcessRootRef extract root ref or backref info from item and bytebuffer
@@ -125,9 +125,9 @@ func ProcessFileExtentItem(fileExtentItemCache *llrb.LLRB, owner uint64, item *B
 	switch fileExtentItem.Type {
 	case BTRFS_FILE_EXTENT_INLINE:
 		// data follows
-		//		fmt.Printf(" Inline Size:%d %d", binary.Size(fileExtentItem), item.Size)
+		//		fmt.Fprintf(os.Stderr," Inline Size:%d %d", binary.Size(fileExtentItem), item.Size)
 
-		//		fmt.Printf("Data: %s\n", string(itemBuf[item.Offset+21:]))
+		//		fmt.Fprintf(os.Stderr,"Data: %s\n", string(itemBuf[item.Offset+21:]))
 		tmp.Data = itemBuf[item.Offset+21:]
 	case BTRFS_FILE_EXTENT_REG, BTRFS_FILE_EXTENT_PREALLOC:
 		fileExtentItemCont := new(BtrfsFileExtentItemCont)
@@ -137,9 +137,9 @@ func ProcessFileExtentItem(fileExtentItemCache *llrb.LLRB, owner uint64, item *B
 		}
 		tmp.FileExtentItems[item.Key.Offset] = *fileExtentItem
 		tmp.FileExtentItemsCont[item.Key.Offset] = *fileExtentItemCont
-		//		fmt.Printf("ProcessFileExtentItem ite %+v\n", item)
-		//		fmt.Printf("BtrfsFileExtentItem %+v\n", fileExtentItem)
-		//		fmt.Printf("BtrfsFileExtentItemCont %+v\n", fileExtentItemCont)
+		//		fmt.Fprintf(os.Stderr,"ProcessFileExtentItem ite %+v\n", item)
+		//		fmt.Fprintf(os.Stderr,"BtrfsFileExtentItem %+v\n", fileExtentItem)
+		//		fmt.Fprintf(os.Stderr,"BtrfsFileExtentItemCont %+v\n", fileExtentItemCont)
 	}
 	Inodes[k] = tmp
 }
@@ -215,7 +215,7 @@ func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, item
 	//		BtrfsPrintKey(&item.Key)
 	itemPtr := itemBuf[item.Offset : item.Offset+item.Size]
 	bytereader := bytes.NewReader(itemPtr)
-	//		fmt.Printf(" ")
+	//		fmt.Fprintf(os.Stderr," ")
 	for bytereader.Len() != 0 {
 		dirItem := new(BtrfsDirItem)
 		_ = binary.Read(bytereader, binary.LittleEndian, dirItem)
@@ -225,15 +225,15 @@ func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, item
 		if length > BTRFS_NAME_LEN {
 			length = BTRFS_NAME_LEN
 		}
-		//		fmt.Printf(" namelen: %d ",length)
+		//		fmt.Fprintf(os.Stderr," namelen: %d ",length)
 		namebytes := make([]byte, length)
 		_ = binary.Read(bytereader, binary.LittleEndian, namebytes)
 
-		//				fmt.Printf(" %s ", string(namebytes))
+		//				fmt.Fprintf(os.Stderr," %s ", string(namebytes))
 		if dirItem.DataLen != 0 {
 			databytes := make([]byte, dirItem.DataLen)
 			_ = binary.Read(bytereader, binary.LittleEndian, databytes)
-			//			fmt.Printf("datalen: %d", dirItem.DataLen)
+			//			fmt.Fprintf(os.Stderr,"datalen: %d", dirItem.DataLen)
 		}
 		k := InodeKey{
 			Owner: owner,
@@ -268,7 +268,7 @@ func ProcessDirItem(dirItemCache *llrb.LLRB, owner uint64, item *BtrfsItem, item
 			Inodes[k] = tmp
 		}
 	}
-	//		fmt.Printf("\n")
+	//		fmt.Fprintf(os.Stderr,"\n")
 }
 
 // processBlockGroupItem creates a new block group record and update the cache by latest generation for each blockgroup item
@@ -296,7 +296,7 @@ again:
 			//				   sizeof(*rec) - offset))
 			//				ret = -EEXIST;
 			//			goto freeOut;
-			fmt.Printf("processBlockGroupItem: same generation %+v\n", rec)
+			fmt.Fprintf(os.Stderr, "processBlockGroupItem: same generation %+v\n", rec)
 			return
 		}
 		bgCache.Block_Groups.Remove(exists.List)
@@ -328,7 +328,7 @@ func MapLogical(mapCache *llrb.LLRB, logical uint64) (error, uint64) {
 		return false
 	})
 	if mapResult != nil {
-		fmt.Printf("MapLogical: searched %d, found %v\n", logical, mapResult)
+		fmt.Fprintf(os.Stderr, "MapLogical: searched %d, found %v\n", logical, mapResult)
 		return nil, mapResult.Stripes[mapResult.NumStripes-1].Physical + logical - mapResult.CacheExtent.Start
 	}
 	return errors.New("No mapping"), 0
@@ -347,7 +347,7 @@ again:
 		}
 		if exists.Generation == rec.Generation {
 			// should not happen
-			fmt.Printf("processDeviceExtentItem: same generation %+v\n", rec)
+			fmt.Fprintf(os.Stderr, "processDeviceExtentItem: same generation %+v\n", rec)
 			return
 		}
 		devextCache.ChunkOrphans.Remove(exists.ChunkList)
@@ -371,7 +371,7 @@ again:
 
 // processChunkItem: inserts new chunks into the chunk cache based on generation
 func processChunkItem(chunkCache *llrb.LLRB, generation uint64, item *BtrfsItem, itemBuf []byte) {
-	//	fmt.Printf("found chunk item\n")
+	//	fmt.Fprintf(os.Stderr,"found chunk item\n")
 	rec := NewChunkRecord(generation, item, itemBuf)
 again:
 	if i := chunkCache.Get(rec); i != nil {
@@ -382,7 +382,7 @@ again:
 		if exists.Generation == rec.Generation {
 			numStripes := rec.NumStripes
 			if exists.NumStripes != numStripes {
-				fmt.Printf("processChunkItem: same generation but different details %+v\n", rec)
+				fmt.Fprintf(os.Stderr, "processChunkItem: same generation but different details %+v\n", rec)
 				// TODO
 				// compare everything from generation to end of the record (varies by num stripes)
 				//int num_stripes = rec->num_stripes;
@@ -478,14 +478,14 @@ func RecoverPrepare(rc *RecoverControl, path string) bool {
 	if !ret {
 		fmt.Errorf("read super block error\n")
 	} else {
-		fmt.Printf("\nSB: %+v\n", sb)
+		fmt.Fprintf(os.Stderr, "\nSB: %+v\n", sb)
 		rc.Sectorsize = sb.Sectorsize
 		rc.Leafsize = sb.Leafsize
 		rc.Generation = sb.Generation
 		rc.ChunkRootGeneration = sb.ChunkRootGeneration
 		rc.CsumSize = BtrfsSuperCsumSize(&sb)
 		rc.Fsid = sb.Fsid
-		fmt.Printf("\nRC: %+v\n", rc)
+		fmt.Fprintf(os.Stderr, "\nRC: %+v\n", rc)
 		//		var buf []byte = make([]byte, rc.Leafsize)
 		/* if seed, the result of scanning below will be partial */
 		if (sb.Flags & BTRFS_SUPER_FLAG_SEEDING) != 0 {
@@ -626,7 +626,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 		blockGroupRec := i.(*BlockGroupRecord)
 		if chunkRec.Length != blockGroupRec.Offset || chunkRec.Offset != blockGroupRec.Objectid || chunkRec.TypeFlags != blockGroupRec.Flags {
 			if !silent {
-				fmt.Printf("Chunk[%d, %d, %d]: length(%d), offset(%d), type(%d) mismatch with block group[%d, %d, %d]: offset(%d), objectid(%d), flags(%d)\n",
+				fmt.Fprintf(os.Stderr, "Chunk[%d, %d, %d]: length(%d), offset(%d), type(%d) mismatch with block group[%d, %d, %d]: offset(%d), objectid(%d), flags(%d)\n",
 					chunkRec.Objectid,
 					chunkRec.Type,
 					chunkRec.Offset,
@@ -648,7 +648,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 			}
 		} else {
 			if !silent {
-				fmt.Printf("Chunk[%d, %d, %d]: length(%d), offset(%d), type(%d) is not found in block group\n",
+				fmt.Fprintf(os.Stderr, "Chunk[%d, %d, %d]: length(%d), offset(%d), type(%d) is not found in block group\n",
 					chunkRec.Objectid,
 					chunkRec.Type,
 					chunkRec.Offset,
@@ -671,7 +671,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 				devExtentRec.ChunkOffset != chunkRec.Offset ||
 				devExtentRec.Length != length {
 				if !silent {
-					fmt.Printf(
+					fmt.Fprintf(os.Stderr,
 						"Chunk[%d, %d, %d] stripe[%d, %d] dismatch dev extent[%d, %d, %d] local [%d, %d, %d]\n",
 						chunkRec.Objectid,
 						chunkRec.Type,
@@ -693,7 +693,7 @@ func checkChunkRefs(chunkRec *ChunkRecord, blockGroupTree *BlockGroupTree, devEx
 			}
 		} else {
 			if !silent {
-				fmt.Printf(
+				fmt.Fprintf(os.Stderr,
 					"Chunk[%d, %d, %d] stripe[%d, %d] is not found in dev extent\n",
 					chunkRec.Objectid,
 					chunkRec.Type,
@@ -730,14 +730,14 @@ func CheckChunks(chunkCache *llrb.LLRB, blockGroupTree *BlockGroupTree, deviceEx
 	if !silent {
 		for i := blockGroupTree.Block_Groups.Front(); i != nil && i.Value != nil; i = i.Next() {
 			bgRec := i.Value.(*BlockGroupRecord)
-			fmt.Printf("Block group[%d, %d] (flags = %d) didn't find the relative chunk.\n",
+			fmt.Fprintf(os.Stderr, "Block group[%d, %d] (flags = %d) didn't find the relative chunk.\n",
 				bgRec.Objectid,
 				bgRec.Offset,
 				bgRec.Flags)
 		}
 		for i := deviceExtentTree.ChunkOrphans.Front(); i != nil && i.Value != nil; i = i.Next() {
 			dextRec := i.Value.(*DeviceExtentRecord)
-			fmt.Printf("Device extent[%d, %d, %d] didn't find the relative chunk.\n",
+			fmt.Fprintf(os.Stderr, "Device extent[%d, %d, %d] didn't find the relative chunk.\n",
 				dextRec.Objectid,
 				dextRec.Offset,
 				dextRec.Length)
@@ -775,14 +775,18 @@ func (a ByChunkOffset) Less(i, j int) bool { return a[i].ChunkOffset < a[j].Chun
 
 //fixupDevExt attempt to create missing device extents using the current block group and devExt
 func fixupDevExt(bg *BlockGroupRecord, devextCache *DeviceExtentTree, devExts *list.List) uint16 {
-	orphanDevexts := devextCache.DeviceOrphans
+	// create array of ChunkOffsets from device extents
+	chunkOffsets := make([]ChunkOffset, devextCache.Tree.Len())
+	j := 0
+	devextCache.Tree.AscendGreaterOrEqual(llrb.Inf(-1), func(i llrb.Item) bool {
+		devExt := i.(*DeviceExtentRecord)
+		chunkOffsets[j] = ChunkOffset{ChunkOffset: devExt.ChunkOffset, devExt: devExt}
+		j++
+		return true
+	})
+
 	// find prev devExt by ChunkOffset
 	chunkObject := bg.Offset
-	chunkOffsets := make([]ChunkOffset, orphanDevexts.Len())
-	for i, j := orphanDevexts.Front(), 0; i != nil && i.Value != nil; i, j = i.Next(), j+1 {
-		devExt := i.Value.(*DeviceExtentRecord)
-		chunkOffsets[j] = ChunkOffset{ChunkOffset: devExt.ChunkOffset, devExt: devExt}
-	}
 	sort.Sort(ByChunkOffset(chunkOffsets))
 	var prevDevExt *DeviceExtentRecord
 	for _, chunkOffset := range chunkOffsets {
@@ -793,7 +797,7 @@ func fixupDevExt(bg *BlockGroupRecord, devextCache *DeviceExtentTree, devExts *l
 			break
 		}
 	}
-	// create a new DevExt after the prevDevExt at the new  ChunkOffset
+	// create a new DevExt after the prevDevExt at the new ChunkOffset
 	tmp := *prevDevExt
 	newDevExt := &tmp
 	offset := chunkObject - newDevExt.ChunkOffset
@@ -820,7 +824,7 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 			// this seems to break mapping for some reason
 			//			nstripes = fixupDevExt(bg, &rc.Devext, devExts)
 		}
-		fmt.Printf("BG  offset  %d found count %d #devExt %d\n", bg.Objectid, nstripes, devExts.Len())
+		fmt.Fprintf(os.Stderr, "BG offset %d found count %d #devExt %d\n", bg.Objectid, nstripes, devExts.Len())
 		chunk := &ChunkRecord{
 			Dextents:    list.New(),
 			BgRec:       bg,
@@ -840,14 +844,14 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 		}
 		rc.Chunk.InsertNoReplace(chunk)
 		if nstripes == 0 {
-			fmt.Printf("No stripes %+v\n", chunk)
+			fmt.Fprintf(os.Stderr, "No stripes %+v\n", chunk)
 			chunk.List = rc.BadChunks.PushBack(chunk)
 			continue
 		}
 		chunk.Dextents.PushBackList(devExts)
 
 		if !btrfsVerifyDeviceExtents(bg, devExts, nstripes) {
-			fmt.Printf("No verify %+v\n", chunk)
+			fmt.Fprintf(os.Stderr, "No verify %+v\n", chunk)
 			continue
 			chunk.List = rc.BadChunks.PushBack(chunk)
 		}
@@ -861,7 +865,7 @@ func BtrfsRecoverChunks(rc *RecoverControl) bool {
 		case ret:
 			chunk.List = rc.GoodChunks.PushBack(chunk)
 		case !ret:
-			fmt.Printf("Bad rebuild %+v\n", chunk)
+			fmt.Fprintf(os.Stderr, "Bad rebuild %+v\n", chunk)
 			chunk.List = rc.BadChunks.PushBack(chunk)
 		}
 	}
@@ -994,14 +998,14 @@ func btrfsVerifyDeviceExtents(bg *BlockGroupRecord, devExts *list.List, nDevExts
 	)
 	expectedNumStripes = calcNumStripes(bg.Flags)
 	if expectedNumStripes != 0 && expectedNumStripes != nDevExts {
-		fmt.Printf("Expected stripes %d Extents %d\n", expectedNumStripes, nDevExts)
+		fmt.Fprintf(os.Stderr, "Expected stripes %d Extents %d\n", expectedNumStripes, nDevExts)
 		return false
 	}
 	stripeLength = calcStripeLength(bg.Flags, bg.Offset, nDevExts)
 	for i := devExts.Front(); i != nil && i.Value != nil; i = i.Next() {
 		devExt := i.Value.(*DeviceExtentRecord)
 		if devExt.Length != stripeLength {
-			fmt.Printf("Expected stripelen %d found leb %d\n", stripeLength, devExt.Length)
+			fmt.Fprintf(os.Stderr, "Expected stripelen %d found len %d\n", stripeLength, devExt.Length)
 			return false
 		}
 	}
