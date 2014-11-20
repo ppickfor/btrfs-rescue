@@ -319,46 +319,55 @@ func depthFirstExtract(tree, dirInode uint64, path string) {
 				for _, fileOffset := range keys {
 					bytenr := Inodes[k].FileExtentItemsCont[fileOffset].DiskBytenr
 					length := Inodes[k].FileExtentItemsCont[fileOffset].DiskNumBytes
-					offset := Inodes[k].FileExtentItemsCont[fileOffset].Offset
-					if Inodes[k].FileExtentItems[fileOffset].Compression == BTRFS_COMPRESS_NONE {
-						bytenr += offset
-					}
-					if err, physical := MapLogical(root.FsInfo.MappingTree.Tree, bytenr); err == nil {
-						fmt.Fprintf(os.Stderr, "MapLogical: %d to %d\n", bytenr, physical)
-						byteblock := make([]byte, length)
-						ret, err := syscall.Pread(rc.Fd, byteblock, int64(physical))
-						byteblock = byteblock[:ret]
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
-							continue
-						} else {
-							if uint64(ret) != length {
-								fmt.Fprintf(os.Stderr, "Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
-							} else {
-								fmt.Fprintf(os.Stderr, "Pread: %s %d @%d\n", path, length, physical)
-							}
+					if bytenr != 0 {
+						// Not sparse
+						offset := Inodes[k].FileExtentItemsCont[fileOffset].Offset
+						if Inodes[k].FileExtentItems[fileOffset].Compression == BTRFS_COMPRESS_NONE {
+							bytenr += offset
 						}
-						// total=0;
-						//while (total < num_bytes) {
-						//		done = pwrite(fd, outbuf + offset + total,
-						//			      num_bytes - total,
-						//			      pos + total);
-						//		if (done < 0) {
-						//			ret = -1;
-						//			goto out;
-						//		}
-						//		total += done;
-						//	}
-						n, err := file.WriteAt(byteblock, int64(fileOffset))
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
-						} else {
-							if *verboseFlag > V_EVERYTHING {
-								fmt.Fprintf(os.Stderr, "Written: %s %d @%d\n", path, n, fileOffset)
+						if err, physical := MapLogical(root.FsInfo.MappingTree.Tree, bytenr); err == nil {
+							fmt.Fprintf(os.Stderr, "MapLogical: %d to %d\n", bytenr, physical)
+							byteblock := make([]byte, length)
+							ret, err := syscall.Pread(rc.Fd, byteblock, int64(physical))
+							byteblock = byteblock[:ret]
+							if err != nil {
+								fmt.Fprintf(os.Stderr, "Pread failed: %s %d @%d %v\n", path, length, physical, os.NewSyscallError("pread64", err))
+								continue
+							} else {
+								if uint64(ret) != length {
+									fmt.Fprintf(os.Stderr, "Pread: short read: %d  %s %d @%d\n", ret, path, length, physical)
+								} else {
+									fmt.Fprintf(os.Stderr, "Pread: %s %d @%d\n", path, length, physical)
+								}
 							}
+							// total=0;
+							//while (total < num_bytes) {
+							//		done = pwrite(fd, outbuf + offset + total,
+							//			      num_bytes - total,
+							//			      pos + total);
+							//		if (done < 0) {
+							//			ret = -1;
+							//			goto out;
+							//		}
+							//		total += done;
+							//	}
+							n, err := file.WriteAt(byteblock, int64(fileOffset))
+							if err != nil {
+								fmt.Fprintf(os.Stderr, "WriteAt failed: %s %d @%d %v\n", path, n, fileOffset, err)
+							} else {
+								if *verboseFlag > V_EVERYTHING {
+									fmt.Fprintf(os.Stderr, "Written: %s %d @%d\n", path, n, fileOffset)
+								}
+							}
+						} else {
+							fmt.Fprintf(os.Stderr, "MapLogical: failed %s %d %v\n", path, bytenr, err)
 						}
 					} else {
-						fmt.Fprintf(os.Stderr, "MapLogical: failed %s %d %v\n", path, bytenr, err)
+						// Sparse extent
+						err := file.Truncate(int64(fileOffset + length))
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Truncate: %d %s %v\n", fileOffset+length, path, err)
+						}
 					}
 				}
 			}
