@@ -594,7 +594,7 @@ func processItems(ctx context.Context, cancel context.CancelFunc, itemBlockChan 
 					_ = binary.Read(bytereader, binary.LittleEndian, items)
 					for _, item := range items {
 						switch item.Key.Type {
-						case BTRFS_CSUM_ITEM_KEY:
+						case BTRFS_CSUM_ITEM_KEY, BTRFS_EXTENT_CSUM_KEY:
 							ProcessCsumItem(nil, owner, &item, infoByteBlock)
 						case BTRFS_INODE_REF_KEY:
 							//							fmt.Fprintf(os.Stderr,"Owner: %d ", owner)
